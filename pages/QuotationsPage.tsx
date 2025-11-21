@@ -4,13 +4,17 @@ import { useAuth } from '../context/AuthContext';
 import { Quotation } from '../types';
 import { getQuotations, deleteQuotation } from '../services/quotationService';
 import { Link } from 'react-router-dom';
-import { Plus, FileText, Search, MoreVertical, Calendar, User, Edit, Trash2, Printer, Loader2 } from 'lucide-react';
+import { Plus, FileText, Search, Edit, Trash2, Loader2, User, AlertTriangle } from 'lucide-react';
 
 const QuotationsPage: React.FC = () => {
   const { user } = useAuth();
   const [quotations, setQuotations] = useState<Quotation[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Delete State
+  const [deleteDialog, setDeleteDialog] = useState<{isOpen: boolean, id: string, no: string}>({ isOpen: false, id: '', no: '' });
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const fetchQuotations = async () => {
     if (!user) return;
@@ -29,14 +33,26 @@ const QuotationsPage: React.FC = () => {
     fetchQuotations();
   }, [user]);
 
-  const handleDelete = async (id: string) => {
-    if (confirm('คุณต้องการลบใบเสนอราคานี้ใช่หรือไม่?')) {
-        try {
-            await deleteQuotation(id);
-            setQuotations(prev => prev.filter(q => q.id !== id));
-        } catch (e) {
-            alert('เกิดข้อผิดพลาดในการลบ');
-        }
+  const handleDeleteClick = (e: React.MouseEvent, doc: Quotation) => {
+    e.stopPropagation();
+    e.preventDefault();
+    if (doc.id) {
+        setDeleteDialog({ isOpen: true, id: doc.id, no: doc.documentNo });
+    }
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteDialog.id) return;
+    setIsDeleting(true);
+    try {
+        await deleteQuotation(deleteDialog.id);
+        setQuotations(prev => prev.filter(q => q.id !== deleteDialog.id));
+        setDeleteDialog({ isOpen: false, id: '', no: '' });
+    } catch (e) {
+        console.error("Delete failed", e);
+        alert('เกิดข้อผิดพลาดในการลบเอกสาร');
+    } finally {
+        setIsDeleting(false);
     }
   };
 
@@ -137,12 +153,16 @@ const QuotationsPage: React.FC = () => {
                                          q.status === 'accepted' ? 'อนุมัติ' : 'ยกเลิก'}
                                     </span>
                                 </td>
-                                <td className="px-6 py-4 text-right">
+                                <td className="px-6 py-4 text-right" onClick={(e) => e.stopPropagation()}>
                                     <div className="flex items-center justify-end gap-2">
                                         <Link to={`/quotations/edit/${q.id}`} className="p-1.5 text-slate-400 hover:text-primary-600 hover:bg-primary-50 rounded transition-colors" title="แก้ไข/พิมพ์">
                                             <Edit size={16} />
                                         </Link>
-                                        <button onClick={() => q.id && handleDelete(q.id)} className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors" title="ลบ">
+                                        <button 
+                                            onClick={(e) => handleDeleteClick(e, q)}
+                                            className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors" 
+                                            title="ลบ"
+                                        >
                                             <Trash2 size={16} />
                                         </button>
                                     </div>
@@ -151,6 +171,39 @@ const QuotationsPage: React.FC = () => {
                         ))}
                     </tbody>
                 </table>
+            </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Dialog */}
+      {deleteDialog.isOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+            <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden p-6 text-center animate-in zoom-in-95 duration-200">
+                <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4 text-red-600">
+                    <AlertTriangle size={32} />
+                </div>
+                <h3 className="text-xl font-bold text-slate-900 mb-2">ยืนยันการลบเอกสาร</h3>
+                <p className="text-slate-500 mb-8">
+                    คุณต้องการลบเอกสาร <span className="font-bold text-slate-800">{deleteDialog.no}</span> ใช่หรือไม่?<br/>
+                    การกระทำนี้ไม่สามารถเรียกคืนได้
+                </p>
+                <div className="flex gap-3 justify-center">
+                    <button 
+                        onClick={() => setDeleteDialog({ isOpen: false, id: '', no: '' })} 
+                        className="px-5 py-2.5 bg-white border border-slate-200 text-slate-700 rounded-xl font-medium hover:bg-slate-50 transition-colors w-full"
+                        disabled={isDeleting}
+                    >
+                        ยกเลิก
+                    </button>
+                    <button 
+                        onClick={confirmDelete} 
+                        disabled={isDeleting} 
+                        className="px-5 py-2.5 bg-red-600 text-white rounded-xl font-medium hover:bg-red-700 transition-colors flex items-center justify-center gap-2 w-full shadow-lg shadow-red-500/20"
+                    >
+                        {isDeleting && <Loader2 size={18} className="animate-spin" />} 
+                        ลบเอกสาร
+                    </button>
+                </div>
             </div>
         </div>
       )}
