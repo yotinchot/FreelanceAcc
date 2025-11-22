@@ -1,13 +1,15 @@
 
 import React, { useEffect, useState, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useAccount } from '../context/AccountContext';
 import { Notification } from '../types';
-import { getUserNotifications, markNotificationAsRead, deleteNotification, checkAndGenerateNotifications, markAllAsRead } from '../services/notificationService';
+import { getAccountNotifications, markNotificationAsRead, deleteNotification, checkAndGenerateNotifications, markAllAsRead } from '../services/notificationService';
 import { Bell, Check, Trash2, AlertCircle, AlertTriangle, Info, FileText, ExternalLink } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 const NotificationBell: React.FC = () => {
   const { user } = useAuth();
+  const { currentAccount } = useAccount();
   const navigate = useNavigate();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [isOpen, setIsOpen] = useState(false);
@@ -15,28 +17,32 @@ const NotificationBell: React.FC = () => {
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   const fetchNotifications = async () => {
-    if (!user) return;
-    const data = await getUserNotifications(user.uid);
+    if (!currentAccount) return;
+    const data = await getAccountNotifications(currentAccount.id);
     setNotifications(data);
     setUnreadCount(data.filter(n => !n.isRead).length);
   };
 
   // Initial check and periodic refresh
   useEffect(() => {
-    if (!user) return;
+    if (!user || !currentAccount) return;
     
     const init = async () => {
-        // Run generation logic
-        await checkAndGenerateNotifications(user.uid);
-        // Then fetch
-        fetchNotifications();
+        try {
+            // Run generation logic
+            await checkAndGenerateNotifications(user.uid, currentAccount.id);
+            // Then fetch
+            await fetchNotifications();
+        } catch (e) {
+            console.error("Notification init error", e);
+        }
     };
     init();
 
-    // Refresh every minute (optional, but good for keeping time-sensitive data fresh in SPA)
+    // Refresh every minute
     const interval = setInterval(fetchNotifications, 60000);
     return () => clearInterval(interval);
-  }, [user]);
+  }, [user, currentAccount]);
 
   // Click outside to close
   useEffect(() => {
@@ -56,8 +62,8 @@ const NotificationBell: React.FC = () => {
   };
 
   const handleMarkAllRead = async () => {
-      if (!user) return;
-      await markAllAsRead(user.uid);
+      if (!currentAccount) return;
+      await markAllAsRead(currentAccount.id);
       setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
       setUnreadCount(0);
   };

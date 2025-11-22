@@ -5,6 +5,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { AccountProvider, useAccount } from './context/AccountContext';
 import Navbar from './components/Navbar';
 import LandingPage from './pages/LandingPage';
+import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
 import CustomersPage from './pages/CustomersPage';
 import DocumentsPage from './pages/DocumentsPage';
@@ -32,7 +33,7 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode, requireAccount?: boo
   }
 
   if (!user) {
-    return <Navigate to="/" replace />;
+    return <Navigate to="/login" replace />;
   }
 
   // If route requires an account selected, but none is selected
@@ -40,9 +41,6 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode, requireAccount?: boo
       // Redirect to selection page
       return <Navigate to="/select-account" replace />;
   }
-
-  // If user is on selection page but already has account selected (optional UX choice)
-  // We generally allow them to visit select-account to switch/add, so no redirect AWAY from it here.
 
   return <>{children}</>;
 };
@@ -59,6 +57,7 @@ const App: React.FC = () => {
             <main className="flex-grow print:p-0 print:m-0 print:block print:w-full print:h-auto print:overflow-visible">
               <Routes>
                 <Route path="/" element={<LandingPage />} />
+                <Route path="/login" element={<LoginPage />} />
                 
                 <Route 
                   path="/select-account" 

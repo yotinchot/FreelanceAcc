@@ -8,18 +8,13 @@ import NotificationBell from './NotificationBell';
 import AccountSwitcher from './AccountSwitcher';
 
 const Navbar: React.FC = () => {
-  const { user, login } = useAuth();
+  const { user } = useAuth();
   const { currentAccount } = useAccount();
   const navigate = useNavigate();
   const location = useLocation();
 
-  const handleLogin = async () => {
-    try {
-        await login();
-        navigate('/select-account');
-    } catch (e) {
-        // Error handled in context
-    }
+  const handleLogin = () => {
+    navigate('/login');
   };
 
   const isActive = (path: string) => location.pathname.startsWith(path);

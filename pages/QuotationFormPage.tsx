@@ -6,10 +6,9 @@ import { Customer, Quotation, QuotationItem, SellerProfile } from '../types';
 import { getCustomers } from '../services/customerService';
 import { createQuotation, getQuotationById, updateQuotation } from '../services/quotationService';
 import { getSellerProfile } from '../services/settingService';
-import { Save, Download, ChevronLeft, Plus, Trash2, AlertTriangle, Loader2, X, Printer } from 'lucide-react';
+import { Save, Download, ChevronLeft, Plus, Trash2, AlertTriangle, Loader2, Printer } from 'lucide-react';
 import { toThaiBaht } from '../utils/currency';
 
-// Declare html2pdf from CDN
 declare const html2pdf: any;
 
 const QuotationFormPage: React.FC = () => {
@@ -21,14 +20,11 @@ const QuotationFormPage: React.FC = () => {
   const [previewMode, setPreviewMode] = useState(false);
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
   
-  // Ref for PDF generation
   const quotationRef = useRef<HTMLDivElement>(null);
   
-  // Data States
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [sellerProfile, setSellerProfile] = useState<SellerProfile | null>(null);
   
-  // Form States
   const [formData, setFormData] = useState<Partial<Quotation>>({
     status: 'draft',
     items: [],
@@ -36,22 +32,11 @@ const QuotationFormPage: React.FC = () => {
     notes: '',
   });
 
-  // Helper for formatting numbers safely
-  const formatNumber = (num: number | string | undefined) => {
-    if (num === undefined || num === null || num === '') return '0.00';
-    const value = parseFloat(String(num));
-    return isNaN(value) ? '0.00' : value.toLocaleString('th-TH', {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2
-    });
-  };
-
-  // Init Dates
   useEffect(() => {
     if (!id) {
         const today = new Date();
         const nextWeek = new Date();
-        nextWeek.setDate(today.getDate() + 30); // Valid for 30 days default
+        nextWeek.setDate(today.getDate() + 30); 
         setFormData(prev => ({
             ...prev,
             issueDate: today,
@@ -60,22 +45,18 @@ const QuotationFormPage: React.FC = () => {
     }
   }, [id]);
 
-  // Load Data
   useEffect(() => {
     const loadData = async () => {
       if (!user) return;
       setLoading(true);
-      window.scrollTo(0, 0); // Ensure page starts at top
+      window.scrollTo(0, 0);
       try {
-        // 1. Load Customers
         const customersData = await getCustomers(user.uid);
         setCustomers(customersData);
 
-        // 2. Load Seller Profile
         const profile = await getSellerProfile(user.uid);
         setSellerProfile(profile);
 
-        // 3. Load Quotation if Edit mode
         if (id) {
           const quote = await getQuotationById(id);
           if (quote) {
@@ -93,12 +74,10 @@ const QuotationFormPage: React.FC = () => {
     loadData();
   }, [user, id, navigate]);
 
-  // Calculations
   const subtotal = formData.items?.reduce((sum, item) => sum + (item.amount || 0), 0) || 0;
   const vatAmount = (subtotal * (formData.vatRate || 0)) / 100;
   const grandTotal = subtotal + vatAmount;
 
-  // Handlers
   const handleCustomerChange = (customerId: string) => {
     const customer = customers.find(c => c.id === customerId);
     if (customer) {
@@ -128,7 +107,6 @@ const QuotationFormPage: React.FC = () => {
     const newItems = [...(formData.items || [])];
     newItems[index] = { ...newItems[index], [field]: value };
     
-    // Recalc Amount
     if (field === 'quantity' || field === 'price') {
         const qty = field === 'quantity' ? parseFloat(value) || 0 : newItems[index].quantity;
         const price = field === 'price' ? parseFloat(value) || 0 : newItems[index].price;
@@ -191,7 +169,6 @@ const QuotationFormPage: React.FC = () => {
     
     setIsGeneratingPdf(true);
 
-    // Option setup:
     const opt = {
         margin: 0,
         filename: `Quotation-${formData.documentNo || 'draft'}.pdf`,
@@ -214,22 +191,13 @@ const QuotationFormPage: React.FC = () => {
     }
   };
 
-  // Component to render the Paper Content
   const InvoicePaper = ({ paperRef }: { paperRef?: React.RefObject<HTMLDivElement | null> }) => (
     <div ref={paperRef} className="bg-white w-[210mm] min-h-[296mm] relative text-slate-900 p-[15mm] text-left mx-auto overflow-hidden flex flex-col select-text">
         {/* Header */}
         <div className="flex justify-between mb-8">
             <div className="w-[60%] flex gap-4">
-                {sellerProfile?.logoUrl && (
-                    <img 
-                        src={sellerProfile.logoUrl} 
-                        alt="Logo" 
-                        className="w-20 h-20 object-contain shrink-0" 
-                        crossOrigin="anonymous" // Important for html2canvas
-                    />
-                )}
                 <div>
-                    <h1 className="text-xl font-bold text-primary-700">{sellerProfile?.companyName || user?.displayName}</h1>
+                    <h1 className="text-xl font-bold text-primary-700">{sellerProfile?.name || user?.displayName}</h1>
                     <p className="text-sm text-slate-600 whitespace-pre-line mt-1">{sellerProfile?.address}</p>
                     <div className="text-sm text-slate-600 mt-1">
                         {sellerProfile?.taxId && <span>เลขประจำตัวผู้เสียภาษี: {sellerProfile.taxId}</span>}
@@ -275,7 +243,6 @@ const QuotationFormPage: React.FC = () => {
                 </thead>
                 <tbody className="text-sm">
                     {formData.items?.map((item, idx) => {
-                        // Safe Number Conversion Logic
                         const qty = Number(item.quantity || (item as any).qty || 0);
                         const unitPrice = Number(item.price || (item as any).unitPrice || (item as any).pricePerUnit || 0);
                         const lineTotal = Number(item.amount || (item as any).total || (item as any).lineTotal || (qty * unitPrice) || 0);
@@ -345,12 +312,6 @@ const QuotationFormPage: React.FC = () => {
                 <div className="p-3 bg-slate-50 rounded border border-slate-100 text-slate-600 whitespace-pre-wrap h-full text-xs break-words">
                     {formData.notes}
                 </div>
-                {sellerProfile?.paymentInfo && (
-                    <div className="mt-4">
-                        <h4 className="font-bold text-slate-800 mb-1">ข้อมูลการชำระเงิน</h4>
-                        <p className="text-xs text-slate-600 whitespace-pre-wrap">{sellerProfile.paymentInfo}</p>
-                    </div>
-                )}
             </div>
             <div className="flex flex-col justify-end text-center gap-16">
                 <div className="border-b border-slate-300 w-3/4 mx-auto"></div>
@@ -364,47 +325,25 @@ const QuotationFormPage: React.FC = () => {
 
   return (
     <>
-        {/* ------------------- SCREEN PREVIEW AREA ------------------- */}
         {previewMode && (
             <div className="fixed inset-0 z-[100] bg-slate-800/95 backdrop-blur-sm flex flex-col print:static print:bg-white print:h-auto print:overflow-visible">
-                {/* Toolbar */}
                 <div className="flex items-center justify-between p-4 bg-slate-900 border-b border-slate-700 shadow-lg shrink-0 print:hidden">
                     <div className="text-slate-300 text-sm font-medium">
                         Preview Mode
                     </div>
                     <div className="flex gap-3">
-                        <button 
-                            type="button"
-                            onClick={() => setPreviewMode(false)} 
-                            className="px-4 py-2 bg-slate-700 text-white rounded-lg hover:bg-slate-600 flex items-center gap-2 transition-colors text-sm"
-                        >
+                        <button onClick={() => setPreviewMode(false)} className="px-4 py-2 bg-slate-700 text-white rounded-lg hover:bg-slate-600 flex items-center gap-2 transition-colors text-sm">
                             <ChevronLeft size={16} /> กลับไปแก้ไข
                         </button>
-
-                        <button 
-                            type="button"
-                            onClick={handlePrint}
-                            className="px-4 py-2 bg-white text-slate-700 rounded-lg hover:bg-slate-50 flex items-center gap-2 transition-colors text-sm font-medium"
-                        >
-                            <Printer size={18} />
-                            พิมพ์เอกสาร
+                        <button onClick={handlePrint} className="px-4 py-2 bg-white text-slate-700 rounded-lg hover:bg-slate-50 flex items-center gap-2 transition-colors text-sm font-medium">
+                            <Printer size={18} /> พิมพ์เอกสาร
                         </button>
-
-                        <button 
-                            type="button"
-                            onClick={handleSavePDF}
-                            disabled={isGeneratingPdf}
-                            className="px-6 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-500 flex items-center gap-2 transition-colors shadow-lg text-sm font-medium disabled:opacity-70"
-                        >
-                            {isGeneratingPdf ? <Loader2 size={18} className="animate-spin" /> : <Download size={18} />}
-                            บันทึก PDF
+                        <button onClick={handleSavePDF} disabled={isGeneratingPdf} className="px-6 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-500 flex items-center gap-2 transition-colors shadow-lg text-sm font-medium disabled:opacity-70">
+                            {isGeneratingPdf ? <Loader2 size={18} className="animate-spin" /> : <Download size={18} />} บันทึก PDF
                         </button>
                     </div>
                 </div>
-                
-                {/* Scrollable Content Area */}
                 <div className="flex-1 overflow-y-auto p-4 md:p-8 flex justify-center print:p-0 print:m-0 print:overflow-visible print:block">
-                    {/* Wrapper for Shadow */}
                     <div className="shadow-2xl print:shadow-none">
                         <InvoicePaper paperRef={quotationRef} />
                     </div>
@@ -412,34 +351,22 @@ const QuotationFormPage: React.FC = () => {
             </div>
         )}
 
-        {/* ------------------- EDIT FORM AREA ------------------- */}
         <div className={`container mx-auto px-4 py-8 max-w-5xl ${previewMode ? 'hidden' : ''} print:hidden`}>
-            {/* Toolbar */}
             <div className="flex items-center justify-between mb-6">
                 <button onClick={() => navigate('/quotations')} className="text-slate-500 hover:text-slate-700 flex items-center gap-1">
                     <ChevronLeft size={20} /> กลับ
                 </button>
                 <div className="flex gap-3">
-                    <button 
-                        type="button"
-                        onClick={() => setPreviewMode(true)} 
-                        className="px-4 py-2 bg-white border border-slate-200 text-slate-700 rounded-lg hover:bg-slate-50 font-medium flex items-center gap-2"
-                    >
+                    <button type="button" onClick={() => setPreviewMode(true)} className="px-4 py-2 bg-white border border-slate-200 text-slate-700 rounded-lg hover:bg-slate-50 font-medium flex items-center gap-2">
                         <Download size={18} /> ตัวอย่าง / พิมพ์
                     </button>
-                    <button 
-                        type="button"
-                        onClick={handleSave} 
-                        disabled={saving}
-                        className="px-6 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 font-medium flex items-center gap-2 shadow-md disabled:opacity-70"
-                    >
-                        {saving ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />}
-                        บันทึก
+                    <button type="button" onClick={handleSave} disabled={saving} className="px-6 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 font-medium flex items-center gap-2 shadow-md disabled:opacity-70">
+                        {saving ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />} บันทึก
                     </button>
                 </div>
             </div>
 
-            {!sellerProfile?.companyName && (
+            {!sellerProfile?.name && (
                 <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 p-4 rounded-xl mb-6 flex items-start gap-3">
                     <AlertTriangle className="shrink-0 mt-0.5" size={20} />
                     <div>
@@ -451,7 +378,6 @@ const QuotationFormPage: React.FC = () => {
             )}
 
             <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                {/* Header Form */}
                 <div className="p-6 border-b border-slate-100 bg-slate-50 grid grid-cols-1 md:grid-cols-2 gap-8">
                     <div>
                         <label className="block text-sm font-medium text-slate-700 mb-1">เลือกลูกค้า <span className="text-red-500">*</span></label>
@@ -513,7 +439,6 @@ const QuotationFormPage: React.FC = () => {
                     </div>
                 </div>
 
-                {/* Items */}
                 <div className="p-6">
                     <h3 className="font-bold text-slate-800 mb-4">รายการสินค้า / บริการ</h3>
                     <div className="space-y-3">
@@ -528,7 +453,7 @@ const QuotationFormPage: React.FC = () => {
                                         onChange={(e) => updateItem(idx, 'description', e.target.value)}
                                     />
                                     <textarea 
-                                        placeholder="รายละเอียด (กด Shift+Enter เพื่อขึ้นบรรทัดใหม่)"
+                                        placeholder="รายละเอียด"
                                         rows={2}
                                         className="w-full p-2 border border-slate-200 rounded focus:ring-2 focus:ring-primary-500 outline-none text-xs text-slate-600 resize-none bg-white"
                                         value={item.details || ''}
@@ -576,7 +501,6 @@ const QuotationFormPage: React.FC = () => {
                     </div>
                 </div>
 
-                {/* Summary */}
                 <div className="p-6 border-t border-slate-100 grid grid-cols-1 md:grid-cols-2 gap-8">
                     <div>
                         <label className="block text-sm font-medium text-slate-700 mb-1">หมายเหตุ / เงื่อนไขการชำระเงิน</label>

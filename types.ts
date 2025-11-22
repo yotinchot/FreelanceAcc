@@ -17,32 +17,24 @@ export type AccountType = 'company' | 'freelance';
 
 export interface Account {
   id: string;
-  userId: string; // Owner
-  type: AccountType;
-  name: string; // Company Name or Freelancer Name
+  user_id: string;
+  type: AccountType; // Maps to account_type
+  name: string; // Maps to business_name
   taxId: string;
   address: string;
   phone: string;
   email: string;
-  logoUrl?: string;
-  signatureUrl?: string;
-  paymentInfo?: string;
   createdAt: any;
   updatedAt?: any;
-  emailNotifications?: {
-    invoiceDue: boolean;
-    invoiceOverdue: boolean;
-    weeklyReport: boolean;
-  };
 }
 
-// Backward compatibility alias, though we are moving to Account
+// Backward compatibility alias
 export type SellerProfile = Account;
 
 export interface Customer {
   id?: string;
-  userId: string;
-  accountId: string; // Link to specific account
+  user_id: string;
+  account_id: string;
   name: string;
   taxId?: string;
   address?: string;
@@ -53,8 +45,8 @@ export interface Customer {
 
 export interface QuotationItem {
   id: string;
-  description: string; // Product/Service Name
-  details?: string;    // Additional Description
+  description: string;
+  details?: string;
   quantity: number;
   price: number;
   amount: number; 
@@ -65,27 +57,27 @@ export type DocumentType = 'quotation' | 'invoice' | 'receipt' | 'tax_invoice' |
 export interface AppDocument {
   id?: string;
   type: DocumentType;
-  documentNo: string; // QT-..., INV-..., RC-..., TX-..., TR-...
-  referenceNo?: string; // Ref to previous doc e.g. Ref QT-2024-001
-  referenceId?: string; // ID of the parent doc
-  projectName?: string; // New: Project Name
-  userId: string;
-  accountId: string; // Link to specific account
+  documentNo: string;
+  referenceNo?: string;
+  referenceId?: string;
+  projectName?: string;
+  user_id: string;
+  account_id: string;
   customerId: string;
   customerName: string;
   customerAddress?: string;
   customerTaxId?: string;
   issueDate: Date;
   dueDate: Date;
-  paidDate?: Date; // Date when payment was received
+  paidDate?: Date;
   items: QuotationItem[];
   subtotal: number;
   vatRate: number; 
   vatAmount: number;
   grandTotal: number;
-  withholdingTaxRate?: number; // 1, 2, 3, 5
-  whtReceived?: boolean; // New: For tracking if 50 Tavi is received
-  whtReceivedDate?: Date; // New: When the 50 Tavi was received
+  withholdingTaxRate?: number;
+  whtReceived?: boolean;
+  whtReceivedDate?: Date;
   notes?: string;
   status: 'draft' | 'sent' | 'accepted' | 'rejected' | 'paid' | 'overdue';
   createdAt?: any;
@@ -94,20 +86,19 @@ export interface AppDocument {
 
 export type Quotation = AppDocument;
 
-// New Types for Transactions
 export type TransactionType = 'income' | 'expense';
 
 export interface Transaction {
   id?: string;
-  userId: string;
-  accountId: string; // Link to specific account
+  user_id: string;
+  account_id: string;
   type: TransactionType;
   date: Date;
   amount: number;
   category: string;
   description: string;
-  referenceNo?: string; // Optional link to Document No
-  attachmentUrl?: string; // Base64 or URL
+  referenceNo?: string;
+  attachmentUrl?: string;
   createdAt?: any;
 }
 
@@ -132,17 +123,16 @@ export const INCOME_CATEGORIES = [
   'อื่นๆ'
 ];
 
-// Notification Types
 export interface Notification {
   id?: string;
-  userId: string;
-  accountId?: string; // Optional for system notifs, but mostly should have it
+  user_id: string;
+  account_id?: string;
   title: string;
   message: string;
   type: 'info' | 'warning' | 'error' | 'success';
   isRead: boolean;
   createdAt: any;
-  relatedDocId?: string; // Link to invoice ID
+  relatedDocId?: string;
   relatedDocNo?: string;
-  triggerKey?: string; // Unique key to prevent duplicates e.g., "inv_123_due_3"
+  triggerKey?: string;
 }

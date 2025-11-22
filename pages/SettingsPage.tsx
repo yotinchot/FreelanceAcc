@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { useAccount } from '../context/AccountContext';
 import { updateAccount } from '../services/accountService';
 import { Account } from '../types';
-import { Save, Loader2, Building2, MapPin, Receipt, Phone, CreditCard, AlertCircle, Mail, Bell, User } from 'lucide-react';
+import { Save, Loader2, Building2, MapPin, Receipt, Phone, AlertCircle, User } from 'lucide-react';
 
 const SettingsPage: React.FC = () => {
   const { user } = useAuth();
@@ -29,26 +29,13 @@ const SettingsPage: React.FC = () => {
 
     try {
       await updateAccount(currentAccount.id, formData);
-      await refreshAccounts(); // Reload context to reflect changes in navbar etc.
+      await refreshAccounts(); 
       setMessage({ type: 'success', text: 'บันทึกข้อมูลเรียบร้อยแล้ว' });
     } catch (error) {
       setMessage({ type: 'error', text: 'เกิดข้อผิดพลาดในการบันทึก' });
     } finally {
       setSaving(false);
     }
-  };
-
-  const handleToggleNotification = (key: keyof NonNullable<Account['emailNotifications']>) => {
-      setFormData(prev => ({
-          ...prev,
-          emailNotifications: {
-              invoiceDue: true,
-              invoiceOverdue: true,
-              weeklyReport: false,
-              ...prev.emailNotifications,
-              [key]: !(prev.emailNotifications?.[key] ?? true) // Default true if undefined
-          }
-      }));
   };
 
   if (!currentAccount) return null;
@@ -133,86 +120,6 @@ const SettingsPage: React.FC = () => {
                         />
                     </div>
                 </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Branding & Payment */}
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-          <div className="px-6 py-4 bg-slate-50 border-b border-slate-100 flex items-center gap-2">
-            <div className="p-1.5 bg-white rounded border border-slate-200 shadow-sm">
-              <CreditCard className="text-primary-600" size={20} />
-            </div>
-            <h2 className="font-semibold text-slate-800">การชำระเงิน & โลโก้</h2>
-          </div>
-          <div className="p-6 space-y-5">
-             <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1.5">ลิงก์รูปโลโก้ (URL)</label>
-                <input 
-                    type="text" 
-                    className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-lg shadow-sm focus:ring-2 focus:ring-primary-500 outline-none text-sm transition-all text-slate-900"
-                    placeholder="https://example.com/my-logo.png"
-                    value={formData.logoUrl || ''}
-                    onChange={e => setFormData({...formData, logoUrl: e.target.value})}
-                />
-                <p className="text-xs text-slate-400 mt-1.5">แนะนำขนาดสี่เหลี่ยมจัตุรัส หรือพื้นหลังโปร่งใส (PNG)</p>
-             </div>
-             {formData.logoUrl && (
-                 <div className="p-4 border border-slate-100 rounded-lg bg-slate-50 flex justify-center">
-                     <img src={formData.logoUrl} alt="Logo Preview" className="h-16 object-contain" onError={(e) => (e.currentTarget.style.display = 'none')} />
-                 </div>
-             )}
-
-             <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1.5">ข้อมูลการชำระเงิน (ปรากฏท้ายเอกสาร)</label>
-                <textarea 
-                    rows={3}
-                    className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-lg shadow-sm focus:ring-2 focus:ring-primary-500 outline-none resize-none transition-all text-slate-900"
-                    placeholder="ชื่อบัญชี: นายสมชาย&#10;ธนาคาร: กสิกรไทย&#10;เลขที่บัญชี: 123-4-56789-0"
-                    value={formData.paymentInfo || ''}
-                    onChange={e => setFormData({...formData, paymentInfo: e.target.value})}
-                />
-             </div>
-          </div>
-        </div>
-
-        {/* Notifications */}
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-          <div className="px-6 py-4 bg-slate-50 border-b border-slate-100 flex items-center gap-2">
-            <div className="p-1.5 bg-white rounded border border-slate-200 shadow-sm">
-              <Bell className="text-primary-600" size={20} />
-            </div>
-            <h2 className="font-semibold text-slate-800">การแจ้งเตือน</h2>
-          </div>
-          <div className="p-6 space-y-4">
-            <div className="flex items-center gap-3 p-3 rounded-lg border border-slate-100 bg-slate-50/50">
-                <div className="bg-white p-2 rounded-full shadow-sm border border-slate-100">
-                    <Mail className="text-slate-400" size={20} />
-                </div>
-                <div className="flex-1">
-                    <p className="text-sm font-medium text-slate-900">รับการแจ้งเตือนทางอีเมล</p>
-                    <p className="text-xs text-slate-500">ใช้อีเมล: {formData.email || user?.email}</p>
-                </div>
-            </div>
-
-            <div className="space-y-4 pl-2 pt-2">
-                <label className="flex items-center gap-3 cursor-pointer group">
-                    <div className={`w-11 h-6 rounded-full p-1 transition-colors ${formData.emailNotifications?.invoiceDue ? 'bg-primary-600' : 'bg-slate-200'}`}
-                         onClick={() => handleToggleNotification('invoiceDue')}
-                    >
-                        <div className={`w-4 h-4 rounded-full bg-white shadow-sm transition-transform ${formData.emailNotifications?.invoiceDue ? 'translate-x-5' : ''}`}></div>
-                    </div>
-                    <span className="text-sm text-slate-700 group-hover:text-slate-900 transition-colors">แจ้งเตือนเมื่อใบแจ้งหนี้ใกล้ครบกำหนด (3 วัน และ 1 วัน)</span>
-                </label>
-
-                <label className="flex items-center gap-3 cursor-pointer group">
-                    <div className={`w-11 h-6 rounded-full p-1 transition-colors ${formData.emailNotifications?.invoiceOverdue ? 'bg-primary-600' : 'bg-slate-200'}`}
-                         onClick={() => handleToggleNotification('invoiceOverdue')}
-                    >
-                        <div className={`w-4 h-4 rounded-full bg-white shadow-sm transition-transform ${formData.emailNotifications?.invoiceOverdue ? 'translate-x-5' : ''}`}></div>
-                    </div>
-                    <span className="text-sm text-slate-700 group-hover:text-slate-900 transition-colors">แจ้งเตือนเมื่อใบแจ้งหนี้เกินกำหนดชำระ</span>
-                </label>
             </div>
           </div>
         </div>

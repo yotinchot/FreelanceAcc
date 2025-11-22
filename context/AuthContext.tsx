@@ -1,19 +1,13 @@
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { 
-  signInWithPopup, 
-  signOut, 
-  onAuthStateChanged, 
-  User 
-} from 'firebase/auth';
-import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
-import { auth, googleProvider, db } from '../services/firebase';
+import { supabase } from '../services/supabase';
 import { UserProfile } from '../types';
 
 interface AuthContextType {
   user: UserProfile | null;
   loading: boolean;
-  login: () => Promise<void>;
+  login: (email: string, password: string) => Promise<any>;
+  register: (email: string, password: string) => Promise<any>;
   logout: () => Promise<void>;
 }
 
@@ -23,132 +17,74 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
 
-  // Function to sync Firebase Auth User with Firestore User Document
-  const syncUserToFirestore = async (firebaseUser: User) => {
-    if (!db) return;
-
-    try {
-        const userRef = doc(db, 'users', firebaseUser.uid);
-        const userSnap = await getDoc(userRef);
-    
-        const userData: Partial<UserProfile> = {
-          uid: firebaseUser.uid,
-          email: firebaseUser.email,
-          displayName: firebaseUser.displayName,
-          photoURL: firebaseUser.photoURL,
-          lastLogin: new Date(),
-        };
-    
-        if (!userSnap.exists()) {
-          // Create new user document
-          await setDoc(userRef, {
-            ...userData,
-            createdAt: serverTimestamp(),
-          });
+  useEffect(() => {
+    // Check active session
+    const getSession = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user) {
+          mapUser(session.user);
         } else {
-          // Update existing user login time
-          await setDoc(userRef, userData, { merge: true });
+          setUser(null);
         }
-        
-        // Update local state
-        setUser({
-            uid: firebaseUser.uid,
-            email: firebaseUser.email,
-            displayName: firebaseUser.displayName,
-            photoURL: firebaseUser.photoURL,
-            createdAt: userSnap.exists() ? userSnap.data().createdAt?.toDate() : new Date(),
-            lastLogin: new Date(),
-        });
-    } catch (error) {
-        console.error("Error syncing user to Firestore:", error);
-        // Fallback to just setting state if DB fails
-        setUser({
-            uid: firebaseUser.uid,
-            email: firebaseUser.email,
-            displayName: firebaseUser.displayName,
-            photoURL: firebaseUser.photoURL,
-            createdAt: new Date(),
-            lastLogin: new Date(),
-        });
-    }
+      } catch (error) {
+        console.error("Auth session check error:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    getSession();
+
+    // Listen for changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        mapUser(session.user);
+      } else {
+        setUser(null);
+      }
+      setLoading(false);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const mapUser = (sbUser: any) => {
+    setUser({
+      uid: sbUser.id,
+      email: sbUser.email,
+      displayName: sbUser.user_metadata?.full_name || sbUser.email?.split('@')[0] || 'User',
+      photoURL: sbUser.user_metadata?.avatar_url || null,
+      createdAt: new Date(sbUser.created_at),
+      lastLogin: new Date(sbUser.last_sign_in_at || Date.now())
+    });
   };
 
-  const login = async () => {
-    try {
-      if (!auth || !googleProvider) {
-        console.log("Running in Demo Mode");
-        // MOCK LOGIN FOR DEMO PURPOSES
-        const mockUser: UserProfile = {
-            uid: 'demo-user-123',
-            email: 'demo@freelance.th',
-            displayName: 'สมชาย งานดี (Demo)',
-            photoURL: null,
-            createdAt: new Date(),
-            lastLogin: new Date()
-        };
-        // Store in localStorage to persist across refreshes in demo mode
-        localStorage.setItem('demo_user', JSON.stringify(mockUser));
-        setUser(mockUser);
-        return;
-      }
+  const login = async (email: string, password: string) => {
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) throw error;
+    return data;
+  };
 
-      const result = await signInWithPopup(auth, googleProvider);
-      await syncUserToFirestore(result.user);
-    } catch (error: any) {
-      console.error("Login Failed", error);
-      if (error?.code === 'auth/invalid-api-key') {
-          alert("Firebase configuration is invalid. Checking console for details.");
-      }
-      throw error;
-    }
+  const register = async (email: string, password: string) => {
+    const { data, error } = await supabase.auth.signUp({ email, password });
+    if (error) throw error;
+    return data;
   };
 
   const logout = async () => {
-    try {
-        if(auth) {
-            await signOut(auth);
-        } else {
-            // Clear demo user
-            localStorage.removeItem('demo_user');
-        }
-        setUser(null);
-    } catch (error) {
-      console.error("Logout Failed", error);
-    }
+    await supabase.auth.signOut();
+    setUser(null);
   };
 
-  useEffect(() => {
-    // Check for real Firebase Auth
-    if (auth) {
-        const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-          if (firebaseUser) {
-            await syncUserToFirestore(firebaseUser);
-          } else {
-            setUser(null);
-          }
-          setLoading(false);
-        });
-        return () => unsubscribe();
-    } else {
-        // Check for Demo User in localStorage
-        const demoUserStr = localStorage.getItem('demo_user');
-        if (demoUserStr) {
-            try {
-                const demoUser = JSON.parse(demoUserStr);
-                // Fix date strings back to Date objects
-                demoUser.createdAt = new Date(demoUser.createdAt);
-                demoUser.lastLogin = new Date(demoUser.lastLogin);
-                setUser(demoUser);
-            } catch (e) {
-                localStorage.removeItem('demo_user');
-            }
-        }
-        setLoading(false);
-    }
-  }, []);
-
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout }}>
+    <AuthContext.Provider value={{ 
+        user, 
+        loading, 
+        login,
+        register, 
+        logout
+    }}>
       {children}
     </AuthContext.Provider>
   );

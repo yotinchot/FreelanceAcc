@@ -1,149 +1,127 @@
 
-import { 
-  collection, 
-  addDoc, 
-  query, 
-  where, 
-  getDocs, 
-  doc, 
-  updateDoc, 
-  deleteDoc, 
-  serverTimestamp,
-  orderBy 
-} from 'firebase/firestore';
-import { db } from './firebase';
+import { supabase } from './supabase';
 import { Transaction } from '../types';
 
-const COLLECTION_NAME = 'transactions';
-const LOCAL_STORAGE_KEY = 'freelance_acc_transactions';
-
-// Helper for Demo Mode
-const getLocalTransactions = (): Transaction[] => {
-    const data = localStorage.getItem(LOCAL_STORAGE_KEY);
-    return data ? JSON.parse(data) : [];
-};
-
-const setLocalTransactions = (data: Transaction[]) => {
-    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(data));
-};
+const TABLE_NAME = 'transactions';
 
 export const getTransactions = async (userId: string, accountId?: string): Promise<Transaction[]> => {
   if (!accountId) return [];
 
-  if (!db) {
-    const all = getLocalTransactions();
-    return all
-        .filter(t => t.userId === userId && (t.accountId === accountId || !t.accountId))
-        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  }
-  
   try {
-    const q = query(
-      collection(db, COLLECTION_NAME),
-      where("userId", "==", userId),
-      where("accountId", "==", accountId),
-      orderBy("date", "desc")
-    );
+    const { data, error } = await supabase
+      .from(TABLE_NAME)
+      .select('*')
+      .eq('account_id', accountId)
+      .order('date', { ascending: false });
+
+    if (error) throw error;
     
-    const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(doc => {
-      const data = doc.data();
-      return {
-        id: doc.id,
-        ...data,
-        date: data.date?.toDate ? data.date.toDate() : new Date(data.date),
-        createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : data.createdAt
-      } as Transaction;
-    });
-  } catch (error) {
-    console.error("Error fetching transactions:", error);
-    throw error;
+    return (data || []).map(item => ({
+      id: item.id,
+      user_id: item.user_id || '',
+      account_id: item.account_id,
+      type: item.type,
+      date: new Date(item.date),
+      amount: item.amount,
+      category: item.category,
+      description: item.description,
+      referenceNo: item.reference_no,
+      attachmentUrl: item.attachment_url,
+      createdAt: item.created_at ? new Date(item.created_at) : undefined
+    })) as Transaction[];
+  } catch (error: any) {
+    const msg = error?.message || JSON.stringify(error);
+    console.error("Error fetching transactions:", msg);
+    // Return empty array to prevent UI crash on network/auth error
+    return [];
   }
 };
 
 export const addTransaction = async (transaction: Omit<Transaction, 'id' | 'createdAt'>): Promise<string> => {
-  if (!db) {
-    const newId = 'local_tx_' + Date.now();
-    const newTx: Transaction = {
-        id: newId,
-        ...transaction,
-        createdAt: new Date()
-    };
-    const current = getLocalTransactions();
-    setLocalTransactions([newTx, ...current]);
-    return newId;
-  }
-  
   try {
-    const docRef = await addDoc(collection(db, COLLECTION_NAME), {
-      ...transaction,
-      createdAt: serverTimestamp()
-    });
-    return docRef.id;
-  } catch (error) {
-    console.error("Error adding transaction:", error);
-    throw error;
+    const payload = {
+      user_id: transaction.user_id, 
+      account_id: transaction.account_id,
+      type: transaction.type,
+      date: transaction.date,
+      amount: transaction.amount,
+      category: transaction.category,
+      description: transaction.description,
+      reference_no: transaction.referenceNo,
+      attachment_url: transaction.attachmentUrl,
+      created_at: new Date().toISOString()
+    };
+
+    const { data, error } = await supabase
+      .from(TABLE_NAME)
+      .insert([payload])
+      .select('id')
+      .single();
+
+    if (error) throw error;
+    return data.id;
+  } catch (error: any) {
+    const msg = error?.message || JSON.stringify(error);
+    console.error("Error adding transaction:", msg);
+    throw new Error(msg);
   }
 };
 
 export const updateTransaction = async (id: string, transaction: Partial<Transaction>): Promise<void> => {
-  if (!db) {
-    const current = getLocalTransactions();
-    const index = current.findIndex(c => c.id === id);
-    if (index !== -1) {
-        current[index] = { ...current[index], ...transaction };
-        setLocalTransactions(current);
-    }
-    return;
-  }
-  
   try {
-    const ref = doc(db, COLLECTION_NAME, id);
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { id: _, createdAt: __, ...updateData } = transaction as any;
-    await updateDoc(ref, updateData);
-  } catch (error) {
-    console.error("Error updating transaction:", error);
-    throw error;
+    const payload: any = {};
+    if (transaction.type !== undefined) payload.type = transaction.type;
+    if (transaction.date !== undefined) payload.date = transaction.date;
+    if (transaction.amount !== undefined) payload.amount = transaction.amount;
+    if (transaction.category !== undefined) payload.category = transaction.category;
+    if (transaction.description !== undefined) payload.description = transaction.description;
+    if (transaction.referenceNo !== undefined) payload.reference_no = transaction.referenceNo;
+    if (transaction.attachmentUrl !== undefined) payload.attachment_url = transaction.attachmentUrl;
+
+    const { error } = await supabase
+      .from(TABLE_NAME)
+      .update(payload)
+      .eq('id', id);
+
+    if (error) throw error;
+  } catch (error: any) {
+    const msg = error?.message || JSON.stringify(error);
+    console.error("Error updating transaction:", msg);
+    throw new Error(msg);
   }
 };
 
 export const deleteTransaction = async (id: string): Promise<void> => {
-  if (!db) {
-    const current = getLocalTransactions();
-    const filtered = current.filter(c => c.id !== id);
-    setLocalTransactions(filtered);
-    return;
-  }
-  
   try {
-    await deleteDoc(doc(db, COLLECTION_NAME, id));
-  } catch (error) {
-    console.error("Error deleting transaction:", error);
-    throw error;
+    const { error } = await supabase
+      .from(TABLE_NAME)
+      .delete()
+      .eq('id', id);
+
+    if (error) throw error;
+  } catch (error: any) {
+    const msg = error?.message || JSON.stringify(error);
+    console.error("Error deleting transaction:", msg);
+    throw new Error(msg);
   }
 };
 
 export const exportTransactionsToCSV = (transactions: Transaction[]) => {
-  // Define Header
   const headers = ['วันที่', 'ประเภท', 'หมวดหมู่', 'รายละเอียด', 'จำนวนเงิน', 'อ้างอิง'];
   
-  // Convert Data
   const rows = transactions.map(t => [
     new Date(t.date).toLocaleDateString('th-TH'),
     t.type === 'income' ? 'รายรับ' : 'รายจ่าย',
     t.category,
-    `"${t.description.replace(/"/g, '""')}"`, // Escape quotes
+    `"${t.description.replace(/"/g, '""')}"`,
     t.type === 'expense' ? -t.amount : t.amount,
     t.referenceNo || '-'
   ]);
 
-  // Combine
   const csvContent = 
-    "\uFEFF" + // BOM for Thai encoding support in Excel
+    "\uFEFF" + 
     [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
 
-  // Create Download Link
   const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");

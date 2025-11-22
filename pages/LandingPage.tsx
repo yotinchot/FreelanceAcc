@@ -1,17 +1,18 @@
+
 import React from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { CheckCircle2, BarChart3, ShieldCheck, ArrowRight } from 'lucide-react';
 
 const LandingPage: React.FC = () => {
-  const { user, login } = useAuth();
+  const { user } = useAuth();
   const navigate = useNavigate();
 
   const handleCtaClick = () => {
     if (user) {
       navigate('/dashboard');
     } else {
-      login().then(() => navigate('/dashboard'));
+      navigate('/login');
     }
   };
 

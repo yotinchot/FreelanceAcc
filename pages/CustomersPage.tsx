@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useAccount } from '../context/AccountContext';
@@ -74,15 +73,19 @@ const CustomersPage: React.FC = () => {
     setEditingCustomer(null);
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleAddCustomer = async () => {
     if (!user || !currentAccount) return;
+    
+    if (!formData.name.trim()) {
+        alert('กรุณาระบุชื่อลูกค้า');
+        return;
+    }
 
     try {
       setIsSubmitting(true);
       const customerData = {
-        userId: user.uid,
-        accountId: currentAccount.id,
+        user_id: user.uid,
+        account_id: currentAccount.id,
         ...formData
       };
 
@@ -94,8 +97,10 @@ const CustomersPage: React.FC = () => {
       
       await fetchCustomers();
       handleCloseModal();
-    } catch (error) {
-      alert("เกิดข้อผิดพลาดในการบันทึกข้อมูล: " + error);
+    } catch (error: any) {
+      console.error("Submit error:", error);
+      const msg = error.message || JSON.stringify(error);
+      alert("เกิดข้อผิดพลาดในการบันทึกข้อมูล: " + msg);
     } finally {
       setIsSubmitting(false);
     }
@@ -105,11 +110,10 @@ const CustomersPage: React.FC = () => {
     if (window.confirm('คุณแน่ใจหรือไม่ที่จะลบข้อมูลลูกค้ารายนี้? การกระทำนี้ไม่สามารถเรียกคืนได้')) {
       try {
         await deleteCustomer(id);
-        // Optimistic update for faster UI feel
         setCustomers(prev => prev.filter(c => c.id !== id));
       } catch (error) {
         alert("เกิดข้อผิดพลาดในการลบข้อมูล");
-        fetchCustomers(); // Revert on error
+        fetchCustomers();
       }
     }
   };
@@ -249,94 +253,95 @@ const CustomersPage: React.FC = () => {
               </button>
             </div>
             
-            <div className="overflow-y-auto p-6">
-                <form id="customer-form" onSubmit={handleSubmit} className="space-y-5">
-                <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                    ชื่อลูกค้า / บริษัท <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                    required
-                    type="text"
-                    className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-lg shadow-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition-all text-sm placeholder:text-slate-400 text-slate-800"
-                    placeholder="เช่น บริษัท ตัวอย่าง จำกัด หรือ คุณสมชาย"
-                    value={formData.name}
-                    onChange={e => setFormData({...formData, name: e.target.value})}
-                    />
-                </div>
-
-                <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                    เลขประจำตัวผู้เสียภาษี
-                    </label>
-                    <input
-                    type="text"
-                    className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-lg shadow-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition-all text-sm font-mono placeholder:text-slate-400 text-slate-800"
-                    placeholder="0000000000000"
-                    value={formData.taxId}
-                    onChange={e => setFormData({...formData, taxId: e.target.value})}
-                    />
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* Used Div instead of Form to prevent default submission issues */}
+            <div className="flex flex-col overflow-hidden h-full">
+                <div className="overflow-y-auto p-6 space-y-5">
                     <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                        เบอร์โทรศัพท์
-                    </label>
-                    <input
-                        type="tel"
+                        <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                        ชื่อลูกค้า / บริษัท <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                        required
+                        type="text"
                         className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-lg shadow-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition-all text-sm placeholder:text-slate-400 text-slate-800"
-                        placeholder="08x-xxx-xxxx"
-                        value={formData.phone}
-                        onChange={e => setFormData({...formData, phone: e.target.value})}
-                    />
+                        placeholder="เช่น บริษัท ตัวอย่าง จำกัด หรือ คุณสมชาย"
+                        value={formData.name}
+                        onChange={e => setFormData({...formData, name: e.target.value})}
+                        />
                     </div>
+
                     <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                        อีเมล
-                    </label>
-                    <input
-                        type="email"
-                        className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-lg shadow-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition-all text-sm placeholder:text-slate-400 text-slate-800"
-                        placeholder="email@example.com"
-                        value={formData.email}
-                        onChange={e => setFormData({...formData, email: e.target.value})}
-                    />
+                        <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                        เลขประจำตัวผู้เสียภาษี
+                        </label>
+                        <input
+                        type="text"
+                        className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-lg shadow-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition-all text-sm font-mono placeholder:text-slate-400 text-slate-800"
+                        placeholder="0000000000000"
+                        value={formData.taxId}
+                        onChange={e => setFormData({...formData, taxId: e.target.value})}
+                        />
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                            เบอร์โทรศัพท์
+                        </label>
+                        <input
+                            type="tel"
+                            className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-lg shadow-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition-all text-sm placeholder:text-slate-400 text-slate-800"
+                            placeholder="08x-xxx-xxxx"
+                            value={formData.phone}
+                            onChange={e => setFormData({...formData, phone: e.target.value})}
+                        />
+                        </div>
+                        <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                            อีเมล
+                        </label>
+                        <input
+                            type="email"
+                            className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-lg shadow-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition-all text-sm placeholder:text-slate-400 text-slate-800"
+                            placeholder="email@example.com"
+                            value={formData.email}
+                            onChange={e => setFormData({...formData, email: e.target.value})}
+                        />
+                        </div>
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                        ที่อยู่
+                        </label>
+                        <textarea
+                        rows={3}
+                        className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-lg shadow-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition-all resize-none text-sm placeholder:text-slate-400 text-slate-800"
+                        placeholder="ที่อยู่สำหรับออกใบกำกับภาษี / ส่งเอกสาร"
+                        value={formData.address}
+                        onChange={e => setFormData({...formData, address: e.target.value})}
+                        />
                     </div>
                 </div>
 
-                <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                    ที่อยู่
-                    </label>
-                    <textarea
-                    rows={3}
-                    className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-lg shadow-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition-all resize-none text-sm placeholder:text-slate-400 text-slate-800"
-                    placeholder="ที่อยู่สำหรับออกใบกำกับภาษี / ส่งเอกสาร"
-                    value={formData.address}
-                    onChange={e => setFormData({...formData, address: e.target.value})}
-                    />
+                <div className="px-6 py-4 border-t border-slate-100 bg-white flex gap-3 justify-end shrink-0 rounded-b-2xl">
+                    <button
+                        type="button"
+                        onClick={handleCloseModal}
+                        className="px-5 py-2.5 text-slate-600 font-medium hover:bg-slate-100 rounded-lg transition-colors text-sm"
+                    >
+                        ยกเลิก
+                    </button>
+                    <button
+                        type="button"
+                        onClick={handleAddCustomer}
+                        disabled={isSubmitting}
+                        className="px-5 py-2.5 bg-primary-600 text-white font-medium rounded-lg hover:bg-primary-700 transition-all shadow-lg shadow-primary-500/20 disabled:opacity-70 disabled:cursor-not-allowed flex items-center gap-2 text-sm hover:-translate-y-0.5"
+                    >
+                        {isSubmitting && <Loader2 size={16} className="animate-spin" />}
+                        {editingCustomer ? 'บันทึกการแก้ไข' : 'เพิ่มลูกค้า'}
+                    </button>
                 </div>
-                </form>
-            </div>
-
-            <div className="px-6 py-4 border-t border-slate-100 bg-white flex gap-3 justify-end shrink-0 rounded-b-2xl">
-                <button
-                    type="button"
-                    onClick={handleCloseModal}
-                    className="px-5 py-2.5 text-slate-600 font-medium hover:bg-slate-100 rounded-lg transition-colors text-sm"
-                >
-                    ยกเลิก
-                </button>
-                <button
-                    type="submit"
-                    form="customer-form"
-                    disabled={isSubmitting}
-                    className="px-5 py-2.5 bg-primary-600 text-white font-medium rounded-lg hover:bg-primary-700 transition-all shadow-lg shadow-primary-500/20 disabled:opacity-70 disabled:cursor-not-allowed flex items-center gap-2 text-sm hover:-translate-y-0.5"
-                >
-                    {isSubmitting && <Loader2 size={16} className="animate-spin" />}
-                    {editingCustomer ? 'บันทึกการแก้ไข' : 'เพิ่มลูกค้า'}
-                </button>
             </div>
           </div>
         </div>

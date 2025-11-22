@@ -5,7 +5,7 @@ import { useAccount } from '../context/AccountContext';
 import { AppDocument, DocumentType } from '../types';
 import { getDocuments, deleteDocument } from '../services/documentService';
 import { Link, useNavigate } from 'react-router-dom';
-import { Plus, FileText, Search, Edit, Trash2, Loader2, User, Receipt, BadgeCheck, Calendar, Files, AlertTriangle } from 'lucide-react';
+import { Plus, FileText, Search, Edit, Trash2, Loader2, User, Receipt, BadgeCheck, Calendar, Files, AlertTriangle, AlertCircle } from 'lucide-react';
 
 interface DocumentsPageProps {
     type: DocumentType;
@@ -20,6 +20,7 @@ const DocumentsPage: React.FC<DocumentsPageProps> = ({ type, title, subtitle }) 
   const [docs, setDocs] = useState<AppDocument[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [error, setError] = useState<string | null>(null);
 
   // Delete State
   const [deleteDialog, setDeleteDialog] = useState<{isOpen: boolean, id: string, no: string}>({ isOpen: false, id: '', no: '' });
@@ -28,11 +29,21 @@ const DocumentsPage: React.FC<DocumentsPageProps> = ({ type, title, subtitle }) 
   const fetchDocuments = async () => {
     if (!user || !currentAccount) return;
     setLoading(true);
+    setError(null);
     try {
       const data = await getDocuments(user.uid, currentAccount.id, type);
       setDocs(data);
-    } catch (error) {
-      console.error(error);
+    } catch (e: any) {
+      console.error(e);
+      let msg = "เกิดข้อผิดพลาดในการโหลดข้อมูล";
+      if (e instanceof Error) {
+        msg = e.message;
+      } else if (typeof e === 'object' && e !== null) {
+        msg = e.message || e.error_description || JSON.stringify(e);
+      } else {
+        msg = String(e);
+      }
+      setError(msg);
     } finally {
       setLoading(false);
     }
@@ -160,6 +171,16 @@ const DocumentsPage: React.FC<DocumentsPageProps> = ({ type, title, subtitle }) 
           />
         </div>
       </div>
+      
+      {error && (
+          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl flex items-center gap-3 text-red-700">
+              <AlertCircle className="shrink-0" />
+              <div>
+                  <p className="font-bold">เกิดข้อผิดพลาด</p>
+                  <p className="text-sm break-words font-mono bg-white/50 p-1 rounded">{error}</p>
+              </div>
+          </div>
+      )}
 
       {loading ? (
          <div className="flex justify-center py-20"><Loader2 className="animate-spin text-primary-600 w-10 h-10" /></div>

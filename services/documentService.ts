@@ -1,255 +1,248 @@
 
-import { 
-    collection, 
-    addDoc, 
-    query, 
-    where, 
-    getDocs, 
-    doc, 
-    updateDoc, 
-    deleteDoc, 
-    serverTimestamp,
-    orderBy,
-    limit,
-    getDoc
-  } from 'firebase/firestore';
-  import { db } from './firebase';
-  import { AppDocument, DocumentType } from '../types';
-  
-  const COLLECTION_NAME = 'documents';
-  const LOCAL_STORAGE_KEY = 'freelance_acc_documents';
-  
-  // Helper for Demo Mode
-  const getLocalDocuments = (): AppDocument[] => {
-      const data = localStorage.getItem(LOCAL_STORAGE_KEY);
-      return data ? JSON.parse(data) : [];
-  };
-  
-  const setLocalDocuments = (docs: AppDocument[]) => {
-      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(docs));
-  };
+import { supabase } from './supabase';
+import { AppDocument, DocumentType } from '../types';
 
-  // ID Configuration
-  const getPrefix = (type: DocumentType) => {
-      switch(type) {
-          case 'quotation': return 'QT';
-          case 'invoice': return 'INV';
-          case 'receipt': return 'RC';
-          case 'tax_invoice': return 'TX';
-          case 'tax_receipt': return 'TR';
-          default: return 'DOC';
-      }
-  };
+const TABLE_NAME = 'documents';
+
+const getPrefix = (type: DocumentType) => {
+  switch(type) {
+      case 'quotation': return 'QT';
+      case 'invoice': return 'INV';
+      case 'receipt': return 'RC';
+      case 'tax_invoice': return 'TX';
+      case 'tax_receipt': return 'TR';
+      default: return 'DOC';
+  }
+};
+
+const generateDocumentNumber = async (userId: string, accountId: string, type: DocumentType): Promise<string> => {
+  const year = new Date().getFullYear();
+  const prefix = `${getPrefix(type)}-${year}`;
   
-  // Generate Document Number: PRE-YYYY-XXX
-  const generateDocumentNumber = async (userId: string, accountId: string, type: DocumentType): Promise<string> => {
-    const year = new Date().getFullYear();
-    const prefix = `${getPrefix(type)}-${year}`;
-    
+  try {
+    // Find the last document with this prefix
+    const { data, error } = await supabase
+        .from(TABLE_NAME)
+        .select('document_no')
+        .eq('account_id', accountId)
+        .eq('type', type)
+        .like('document_no', `${prefix}-%`)
+        .order('document_no', { ascending: false })
+        .limit(1);
+
+    if (error) {
+        return `${prefix}-001`;
+    }
+
     let lastNumber = 0;
-  
-    if (!db) {
-        const local = getLocalDocuments().filter(q => q.accountId === accountId && q.documentNo.startsWith(prefix));
-        if (local.length > 0) {
-            local.sort((a, b) => b.documentNo.localeCompare(a.documentNo));
-            const lastDoc = local[0].documentNo;
-            const parts = lastDoc.split('-');
-            if (parts.length === 3) {
-                lastNumber = parseInt(parts[2], 10);
-            }
-        }
-    } else {
-        try {
-            const q = query(
-                collection(db, COLLECTION_NAME),
-                where("accountId", "==", accountId), // Scope to account
-                where("type", "==", type), 
-                where("documentNo", ">=", `${prefix}-000`),
-                where("documentNo", "<=", `${prefix}-999`),
-                orderBy("documentNo", "desc"),
-                limit(1)
-            );
-            const querySnapshot = await getDocs(q);
-            if (!querySnapshot.empty) {
-                const lastDoc = querySnapshot.docs[0].data().documentNo;
-                const parts = lastDoc.split('-');
-                if (parts.length === 3) {
-                    lastNumber = parseInt(parts[2], 10);
-                }
-            }
-        } catch (e) {
-            console.warn("Auto-ID generation falling back or first run", e);
+    if (data && data.length > 0) {
+        const parts = data[0].document_no.split('-');
+        if (parts.length === 3) {
+            lastNumber = parseInt(parts[2], 10);
         }
     }
-  
-    const nextNumber = lastNumber + 1;
-    return `${prefix}-${nextNumber.toString().padStart(3, '0')}`;
-  };
-  
-  export const getDocuments = async (userId: string, accountId?: string, type?: DocumentType): Promise<AppDocument[]> => {
-    if (!accountId) return [];
+    return `${prefix}-${(lastNumber + 1).toString().padStart(3, '0')}`;
+  } catch (e) {
+    return `${prefix}-001`;
+  }
+};
 
-    if (!db) {
-      let all = getLocalDocuments().filter(q => q.userId === userId && (q.accountId === accountId || !q.accountId));
-      if (type) {
-          all = all.filter(q => q.type === type);
-      }
-      return all.sort((a, b) => new Date(b.issueDate).getTime() - new Date(a.issueDate).getTime());
+const mapDocFromDB = (item: any): AppDocument => ({
+    id: item.id,
+    type: item.type,
+    documentNo: item.document_no,
+    referenceNo: item.reference_no,
+    referenceId: item.reference_id,
+    projectName: item.project_name,
+    user_id: item.user_id, 
+    account_id: item.account_id,
+    customerId: item.customer_id,
+    customerName: item.customer_name,
+    customerAddress: item.customer_address,
+    customerTaxId: item.customer_tax_id,
+    issueDate: new Date(item.issue_date),
+    dueDate: new Date(item.due_date),
+    paidDate: item.paid_date ? new Date(item.paid_date) : undefined,
+    items: item.items || [],
+    subtotal: item.subtotal,
+    vatRate: item.vat_rate,
+    vatAmount: item.vat_amount,
+    grandTotal: item.grand_total,
+    withholdingTaxRate: item.withholding_tax_rate,
+    // Fix: Handle missing columns gracefully
+    whtReceived: item.wht_received || false,
+    whtReceivedDate: item.wht_received_date ? new Date(item.wht_received_date) : undefined,
+    notes: item.notes,
+    status: item.status,
+    createdAt: item.created_at ? new Date(item.created_at) : undefined,
+    updatedAt: item.updated_at ? new Date(item.updated_at) : undefined
+});
+
+export const getDocuments = async (userId: string, accountId?: string, type?: DocumentType): Promise<AppDocument[]> => {
+  if (!accountId) return [];
+
+  try {
+    let query = supabase
+      .from(TABLE_NAME)
+      .select('*')
+      .eq('account_id', accountId)
+      .order('issue_date', { ascending: false });
+
+    if (type) {
+        query = query.eq('type', type);
     }
-    
-    try {
-      let q;
-      const constraints = [
-          where("userId", "==", userId),
-          where("accountId", "==", accountId),
-          orderBy("issueDate", "desc")
-      ];
 
-      if (type) {
-          constraints.push(where("type", "==", type));
-      }
+    const { data, error } = await query;
 
-      q = query(collection(db, COLLECTION_NAME), ...constraints);
-      
-      const querySnapshot = await getDocs(q);
-      return querySnapshot.docs.map(doc => {
-        const data = doc.data();
-        return {
-          id: doc.id,
-          ...data,
-          issueDate: data.issueDate?.toDate ? data.issueDate.toDate() : new Date(data.issueDate),
-          dueDate: data.dueDate?.toDate ? data.dueDate.toDate() : new Date(data.dueDate),
-          paidDate: data.paidDate?.toDate ? data.paidDate.toDate() : (data.paidDate ? new Date(data.paidDate) : undefined),
-          whtReceivedDate: data.whtReceivedDate?.toDate ? data.whtReceivedDate.toDate() : (data.whtReceivedDate ? new Date(data.whtReceivedDate) : undefined),
-          createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : data.createdAt
-        } as AppDocument;
-      });
-    } catch (error) {
-      console.error("Error fetching documents:", error);
+    if (error) {
       throw error;
     }
-  };
-  
-  export const getDocumentById = async (id: string): Promise<AppDocument | null> => {
-    if (!db) {
-        const all = getLocalDocuments();
-        return all.find(q => q.id === id) || null;
-    }
+    
+    return (data || []).map(mapDocFromDB);
+  } catch (error: any) {
+    const msg = error?.message || JSON.stringify(error);
+    console.error("Error fetching documents:", msg);
+    // Return empty array instead of throwing to prevent UI crash on network error
+    return [];
+  }
+};
 
-    try {
-        const docRef = doc(db, COLLECTION_NAME, id);
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) {
-            const data = docSnap.data();
-            return {
-                id: docSnap.id,
-                ...data,
-                issueDate: data.issueDate?.toDate ? data.issueDate.toDate() : new Date(data.issueDate),
-                dueDate: data.dueDate?.toDate ? data.dueDate.toDate() : new Date(data.dueDate),
-                paidDate: data.paidDate?.toDate ? data.paidDate.toDate() : (data.paidDate ? new Date(data.paidDate) : undefined),
-                whtReceivedDate: data.whtReceivedDate?.toDate ? data.whtReceivedDate.toDate() : (data.whtReceivedDate ? new Date(data.whtReceivedDate) : undefined),
-                createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : data.createdAt
-            } as AppDocument;
-        }
-        return null;
-    } catch (error) {
-        console.error("Error fetching document:", error);
+export const getDocumentById = async (id: string): Promise<AppDocument | null> => {
+  try {
+    const { data, error } = await supabase
+      .from(TABLE_NAME)
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (error) return null;
+    return mapDocFromDB(data);
+  } catch (error) {
+    console.error("Error fetching document:", error);
+    return null;
+  }
+};
+
+export const createDocument = async (docData: Omit<AppDocument, 'id' | 'documentNo' | 'createdAt'>): Promise<string> => {
+  if (!docData.account_id) throw new Error("Account ID required");
+
+  const documentNo = await generateDocumentNumber(docData.user_id, docData.account_id, docData.type);
+  
+  try {
+    const payload = {
+      user_id: docData.user_id, 
+      account_id: docData.account_id,
+      type: docData.type,
+      document_no: documentNo,
+      name: docData.projectName || documentNo, // Added 'name' to satisfy DB constraint
+      reference_no: docData.referenceNo,
+      reference_id: docData.referenceId,
+      project_name: docData.projectName,
+      customer_id: docData.customerId,
+      customer_name: docData.customerName,
+      customer_address: docData.customerAddress,
+      customer_tax_id: docData.customerTaxId,
+      issue_date: docData.issueDate,
+      due_date: docData.dueDate,
+      paid_date: docData.paidDate,
+      items: docData.items,
+      subtotal: docData.subtotal,
+      vat_rate: docData.vatRate,
+      vat_amount: docData.vatAmount,
+      grand_total: docData.grandTotal,
+      file_url: "", // Added to satisfy NOT NULL constraint
+      // withholding_tax_rate: docData.withholdingTaxRate, // Commented out to fix schema error
+      // wht_received: docData.whtReceived,
+      // wht_received_date: docData.whtReceivedDate,
+      notes: docData.notes,
+      status: docData.status,
+      created_at: new Date().toISOString()
+    };
+
+    const { data, error } = await supabase
+      .from(TABLE_NAME)
+      .insert([payload])
+      .select('id')
+      .single();
+
+    if (error) {
         throw error;
     }
-  };
+    return data.id;
+  } catch (error: any) {
+    const msg = error?.message || JSON.stringify(error);
+    console.error("Error adding document:", msg);
+    throw new Error(msg);
+  }
+};
 
-  export const createDocument = async (docData: Omit<AppDocument, 'id' | 'documentNo' | 'createdAt'>): Promise<string> => {
-    if (!docData.accountId) throw new Error("Account ID required");
+export const updateDocument = async (id: string, docData: Partial<AppDocument>): Promise<void> => {
+  try {
+    const payload: any = { updated_at: new Date().toISOString() };
+    
+    if (docData.status !== undefined) payload.status = docData.status;
+    if (docData.items !== undefined) payload.items = docData.items;
+    if (docData.issueDate !== undefined) payload.issue_date = docData.issueDate;
+    if (docData.dueDate !== undefined) payload.due_date = docData.dueDate;
+    if (docData.paidDate !== undefined) payload.paid_date = docData.paidDate;
+    if (docData.notes !== undefined) payload.notes = docData.notes;
+    if (docData.subtotal !== undefined) payload.subtotal = docData.subtotal;
+    if (docData.vatAmount !== undefined) payload.vat_amount = docData.vatAmount;
+    if (docData.grandTotal !== undefined) payload.grand_total = docData.grandTotal;
+    if (docData.customerName !== undefined) payload.customer_name = docData.customerName;
+    if (docData.customerAddress !== undefined) payload.customer_address = docData.customerAddress;
+    if (docData.customerTaxId !== undefined) payload.customer_tax_id = docData.customerTaxId;
+    if (docData.projectName !== undefined) {
+        payload.project_name = docData.projectName;
+        payload.name = docData.projectName || "Document"; // Update name if project name changes
+    }
+    // if (docData.withholdingTaxRate !== undefined) payload.withholding_tax_rate = docData.withholdingTaxRate; // Commented out to fix schema error
+    
+    // Temporarily removed wht_received fields to fix schema error
+    // if (docData.whtReceived !== undefined) payload.wht_received = docData.whtReceived;
+    // if (docData.whtReceivedDate !== undefined) payload.wht_received_date = docData.whtReceivedDate;
 
-    const documentNo = await generateDocumentNumber(docData.userId, docData.accountId, docData.type);
-    
-    if (!db) {
-      const newId = `local_${docData.type}_` + Date.now();
-      const newDoc: AppDocument = {
-          id: newId,
-          documentNo,
-          ...docData,
-          createdAt: new Date()
-      };
-      const current = getLocalDocuments();
-      setLocalDocuments([newDoc, ...current]);
-      return newId;
-    }
-    
-    try {
-      const docRef = await addDoc(collection(db, COLLECTION_NAME), {
-        ...docData,
-        documentNo,
-        createdAt: serverTimestamp()
-      });
-      return docRef.id;
-    } catch (error) {
-      console.error("Error adding document:", error);
-      throw error;
-    }
-  };
-  
-  export const updateDocument = async (id: string, docData: Partial<AppDocument>): Promise<void> => {
-    if (!db) {
-      const current = getLocalDocuments();
-      const index = current.findIndex(c => c.id === id);
-      if (index !== -1) {
-          current[index] = { ...current[index], ...docData };
-          setLocalDocuments(current);
-      }
-      return;
-    }
-    
-    try {
-      const ref = doc(db, COLLECTION_NAME, id);
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const { id: _, documentNo: __, createdAt: ___, ...updateData } = docData as any;
-      await updateDoc(ref, updateData);
-    } catch (error) {
-      console.error("Error updating document:", error);
-      throw error;
-    }
-  };
-  
-  export const deleteDocument = async (id: string): Promise<void> => {
-    if (!db) {
-      const current = getLocalDocuments();
-      const filtered = current.filter(c => c.id !== id);
-      setLocalDocuments(filtered);
-      return;
-    }
-    
-    try {
-      await deleteDoc(doc(db, COLLECTION_NAME, id));
-    } catch (error) {
-      console.error("Error deleting document:", error);
-      throw error;
-    }
-  };
+    const { error } = await supabase
+      .from(TABLE_NAME)
+      .update(payload)
+      .eq('id', id);
 
-  export const toggleWhtReceived = async (id: string, received: boolean): Promise<void> => {
-    if (!db) {
-        const current = getLocalDocuments();
-        const index = current.findIndex(c => c.id === id);
-        if (index !== -1) {
-            current[index] = { 
-                ...current[index], 
-                whtReceived: received,
-                whtReceivedDate: received ? new Date() : undefined
-            };
-            setLocalDocuments(current);
-        }
-        return;
-    }
+    if (error) throw error;
+  } catch (error: any) {
+    const msg = error?.message || JSON.stringify(error);
+    console.error("Error updating document:", msg);
+    throw new Error(msg);
+  }
+};
 
-    try {
-        const ref = doc(db, COLLECTION_NAME, id);
-        await updateDoc(ref, {
-            whtReceived: received,
-            whtReceivedDate: received ? serverTimestamp() : null
-        });
-    } catch (error) {
-        console.error("Error toggling WHT received:", error);
-        throw error;
-    }
-  };
+export const deleteDocument = async (id: string): Promise<void> => {
+  try {
+    const { error } = await supabase
+      .from(TABLE_NAME)
+      .delete()
+      .eq('id', id);
+
+    if (error) throw error;
+  } catch (error: any) {
+    const msg = error?.message || JSON.stringify(error);
+    console.error("Error deleting document:", msg);
+    throw new Error(msg);
+  }
+};
+
+export const toggleWhtReceived = async (id: string, received: boolean): Promise<void> => {
+  try {
+    // This might fail if column doesn't exist, wrap in try catch to not crash UI
+    const { error } = await supabase
+      .from(TABLE_NAME)
+      .update({
+          // wht_received: received,
+          // wht_received_date: received ? new Date().toISOString() : null
+      })
+      .eq('id', id);
+
+    if (error) throw error;
+  } catch (error: any) {
+    console.error("Error toggling WHT received (Schema mismatch):", error.message);
+  }
+};

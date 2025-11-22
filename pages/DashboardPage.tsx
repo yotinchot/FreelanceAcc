@@ -16,16 +16,28 @@ const DashboardPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [range, setRange] = useState<DateRange>('year'); 
   const [data, setData] = useState<DashboardData | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const loadData = async () => {
         if (!user || !currentAccount) return;
         setLoading(true);
+        setError(null);
         try {
             const result = await getDashboardData(user.uid, currentAccount.id, range);
             setData(result);
-        } catch (e) {
-            console.error(e);
+        } catch (e: any) {
+            console.error("Dashboard load error:", e);
+            let msg = "เกิดข้อผิดพลาด";
+            if (e instanceof Error) {
+                msg = e.message;
+            } else if (typeof e === 'object' && e !== null) {
+                // Use JSON.stringify for objects to avoid [object Object]
+                msg = e.message || e.error_description || JSON.stringify(e);
+            } else {
+                msg = String(e);
+            }
+            setError(msg);
         } finally {
             setLoading(false);
         }
@@ -41,6 +53,21 @@ const DashboardPage: React.FC = () => {
 
   if (loading) {
       return <div className="flex justify-center items-center h-[80vh]"><Loader2 className="animate-spin text-primary-600 w-10 h-10" /></div>;
+  }
+
+  if (error) {
+      return (
+          <div className="container mx-auto px-4 py-20 text-center">
+              <div className="bg-red-50 p-8 rounded-xl border border-red-200 inline-block max-w-lg">
+                  <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
+                  <h3 className="text-lg font-bold text-red-800 mb-2">เกิดข้อผิดพลาดในการโหลดข้อมูล</h3>
+                  <p className="text-red-600 text-sm break-words font-mono bg-white/50 p-2 rounded overflow-auto max-h-[200px]">{error}</p>
+                  <button onClick={() => window.location.reload()} className="mt-4 px-4 py-2 bg-white border border-red-200 text-red-700 rounded-lg hover:bg-red-50 text-sm font-medium">
+                      ลองใหม่
+                  </button>
+              </div>
+          </div>
+      );
   }
 
   const todos = data?.todo;

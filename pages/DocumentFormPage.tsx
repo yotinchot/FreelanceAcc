@@ -10,7 +10,6 @@ import { addTransaction } from '../services/transactionService';
 import { toThaiBaht } from '../utils/currency';
 import { Save, Download, ChevronLeft, Plus, Trash2, Loader2, X, Printer, RefreshCw, CheckCircle2, AlertCircle, Eye, ArrowLeft } from 'lucide-react';
 
-// Declare html2pdf from CDN
 declare const html2pdf: any;
 
 interface DocumentFormProps {
@@ -28,11 +27,10 @@ const DocumentFormPage: React.FC<DocumentFormProps> = ({ type }) => {
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
   const [converting, setConverting] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   
-  // WHT Toggle State
   const [enableWht, setEnableWht] = useState(false);
 
-  // Dialog State
   const [dialog, setDialog] = useState<{
     isOpen: boolean;
     title: string;
@@ -46,9 +44,8 @@ const DocumentFormPage: React.FC<DocumentFormProps> = ({ type }) => {
     type: 'success'
   });
   
-  // Refs for PDF generation
-  const previewRef = useRef<HTMLDivElement>(null); // Visible in Modal
-  const hiddenRef = useRef<HTMLDivElement>(null);  // Hidden for direct download
+  const previewRef = useRef<HTMLDivElement>(null); 
+  const hiddenRef = useRef<HTMLDivElement>(null); 
   
   const [customers, setCustomers] = useState<Customer[]>([]);
   
@@ -81,7 +78,6 @@ const DocumentFormPage: React.FC<DocumentFormProps> = ({ type }) => {
 
   useEffect(() => {
     if (!id) {
-        // Reset form when switching create types
         const today = new Date();
         const next = new Date();
         if (type === 'quotation') {
@@ -121,6 +117,7 @@ const DocumentFormPage: React.FC<DocumentFormProps> = ({ type }) => {
     const loadData = async () => {
       if (!user || !currentAccount) return;
       setLoading(true);
+      setError(null);
       try {
         const customersData = await getCustomers(user.uid, currentAccount.id);
         setCustomers(customersData);
@@ -138,8 +135,10 @@ const DocumentFormPage: React.FC<DocumentFormProps> = ({ type }) => {
              navigate(`/${getRoutePath(type)}`);
           }
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error(error);
+        const msg = error?.message || (typeof error === 'object' ? JSON.stringify(error) : String(error));
+        setError(msg);
       } finally {
         setLoading(false);
       }
@@ -147,7 +146,6 @@ const DocumentFormPage: React.FC<DocumentFormProps> = ({ type }) => {
     loadData();
   }, [user, currentAccount, id, navigate, type]);
 
-  // Calculations
   const subtotal = formData.items?.reduce((sum, item) => sum + (item.amount || 0), 0) || 0;
   const vatAmount = (subtotal * (formData.vatRate || 0)) / 100;
   const grandTotal = subtotal + vatAmount;
@@ -156,7 +154,6 @@ const DocumentFormPage: React.FC<DocumentFormProps> = ({ type }) => {
   const whtAmount = (subtotal * whtRate) / 100;
   const netTotal = grandTotal - whtAmount;
 
-  // Handlers
   const showDialog = (title: string, message: string, type: 'success' | 'error' | 'confirm', onConfirm?: () => void) => {
       setDialog({ isOpen: true, title, message, type, onConfirm });
   };
@@ -205,14 +202,13 @@ const DocumentFormPage: React.FC<DocumentFormProps> = ({ type }) => {
     setFormData(prev => ({ ...prev, items: newItems }));
   };
 
-  // Helper to record transaction
   const recordIncomeTransaction = async (docId: string, docData: any) => {
       try {
         const total = docData.grandTotal || 0;
         
         await addTransaction({
-            userId: user!.uid,
-            accountId: currentAccount!.id,
+            user_id: user!.uid,
+            account_id: currentAccount!.id,
             type: 'income',
             amount: total, 
             date: docData.issueDate || new Date(),
@@ -247,8 +243,7 @@ const DocumentFormPage: React.FC<DocumentFormProps> = ({ type }) => {
             ...formData,
             withholdingTaxRate: finalWhtRate,
             type,
-            userId: user.uid,
-            accountId: currentAccount.id,
+            account_id: currentAccount.id,
             subtotal: _subtotal,
             vatAmount: _vatAmount,
             grandTotal: _grandTotal
@@ -259,17 +254,18 @@ const DocumentFormPage: React.FC<DocumentFormProps> = ({ type }) => {
         if (id) {
             await updateDocument(id, finalData);
         } else {
+            finalData.user_id = user.uid; 
             savedId = await createDocument(finalData);
             
-            // --- AUTO RECORD INCOME TRANSACTION ---
             if (type === 'receipt' || type === 'tax_receipt' || type === 'tax_invoice') {
                 await recordIncomeTransaction(savedId!, { ...finalData, documentNo: 'PENDING', grandTotal: _grandTotal });
             }
         }
         return savedId || null;
-    } catch (error) {
+    } catch (error: any) {
         console.error(error);
-        showDialog('เกิดข้อผิดพลาด', 'บันทึกไม่สำเร็จ: ' + error, 'error');
+        const msg = error?.message || (typeof error === 'object' ? JSON.stringify(error) : String(error));
+        showDialog('เกิดข้อผิดพลาด', 'บันทึกไม่สำเร็จ: ' + msg, 'error');
         return null;
     } finally {
         setSaving(false);
@@ -317,14 +313,11 @@ const DocumentFormPage: React.FC<DocumentFormProps> = ({ type }) => {
   };
 
   const handleConvert = async (targetType: DocumentType) => {
-      // AUTO SAVE logic: always try to save first
       let currentId = id;
       if (!currentId || saving) {
-          // If we are already saving (edge case), or it's a new doc, save first
           currentId = await saveDocumentToDb();
           if (!currentId) return; 
       } else {
-          // Even if id exists, save any changes on screen
           await saveDocumentToDb();
       }
       
@@ -341,7 +334,7 @@ const DocumentFormPage: React.FC<DocumentFormProps> = ({ type }) => {
         const newData: any = {
             ...sourceDoc,
             type: targetType,
-            accountId: currentAccount.id,
+            account_id: currentAccount.id,
             referenceNo: sourceDoc.documentNo, 
             referenceId: sourceId,
             status: (targetType === 'tax_receipt' || targetType === 'receipt') ? 'paid' : 'sent',
@@ -356,7 +349,6 @@ const DocumentFormPage: React.FC<DocumentFormProps> = ({ type }) => {
         
         const newId = await createDocument(newData);
 
-        // Update source invoice status to paid if converting to receipt
         if (type === 'invoice' && (targetType === 'tax_receipt' || targetType === 'receipt')) {
             await updateDocument(sourceId, {
                 status: 'paid',
@@ -372,15 +364,15 @@ const DocumentFormPage: React.FC<DocumentFormProps> = ({ type }) => {
         }
         
         navigate(`/${getRoutePath(targetType)}/edit/${newId}`);
-    } catch (error) {
+    } catch (error: any) {
         console.error(error);
-        showDialog('เกิดข้อผิดพลาด', 'แปลงเอกสารไม่สำเร็จ', 'error');
+        const msg = error?.message || (typeof error === 'object' ? JSON.stringify(error) : String(error));
+        showDialog('เกิดข้อผิดพลาด', 'แปลงเอกสารไม่สำเร็จ: ' + msg, 'error');
     } finally {
         setConverting(false);
     }
   };
 
-  // --- PAPER COMPONENT ---
   interface PaperProps {
       customTitle?: string;
       customSubtitle?: string;
@@ -404,9 +396,6 @@ const DocumentFormPage: React.FC<DocumentFormProps> = ({ type }) => {
             )}
             <div className="flex justify-between mb-6">
                 <div className="w-[60%] flex gap-4">
-                     {currentAccount?.logoUrl && (
-                        <img src={currentAccount.logoUrl} alt="Logo" className="w-20 h-20 object-contain shrink-0" crossOrigin="anonymous" />
-                    )}
                     <div>
                         <h1 className={`text-xl font-bold ${themeColor.split(' ')[0]}`}>{currentAccount?.name}</h1>
                         <p className="text-sm text-slate-600 whitespace-pre-line mt-1 leading-tight">{currentAccount?.address}</p>
@@ -483,7 +472,6 @@ const DocumentFormPage: React.FC<DocumentFormProps> = ({ type }) => {
                     </thead>
                     <tbody className="text-sm">
                         {formData.items?.map((item, idx) => {
-                            // Safe Number Conversion Logic
                             const qty = Number(item.quantity || (item as any).qty || 0);
                             const unitPrice = Number(item.price || (item as any).unitPrice || (item as any).pricePerUnit || 0);
                             const lineTotal = Number(item.amount || (item as any).total || (item as any).lineTotal || (qty * unitPrice) || 0);
@@ -492,7 +480,7 @@ const DocumentFormPage: React.FC<DocumentFormProps> = ({ type }) => {
                                 <tr key={idx} className="border-b border-slate-100 align-top">
                                     <td className="py-2 px-2 text-center text-slate-500">{idx + 1}</td>
                                     <td className="py-2 px-2 text-slate-800">
-                                        <div className="font-medium text-slate-900">{item.description || item.name || (item as any).title || '-'}</div>
+                                        <div className="font-medium text-slate-900">{item.description || (item as any).name || (item as any).title || '-'}</div>
                                         {item.details && <div className="text-xs text-slate-500 mt-0.5 whitespace-pre-line">{item.details}</div>}
                                     </td>
                                     <td className="py-2 px-2 text-right text-slate-900 font-normal">
@@ -580,9 +568,6 @@ const DocumentFormPage: React.FC<DocumentFormProps> = ({ type }) => {
                                 <div className="mt-2">ผู้จ่ายเงิน</div>
                             </div>
                             <div className="text-center">
-                                {currentAccount?.signatureUrl && (
-                                    <img src={currentAccount.signatureUrl} className="h-10 mx-auto object-contain mb-[-10px]" alt="signature" crossOrigin="anonymous"/>
-                                 )}
                                 <div className="border-b border-dotted border-slate-400 h-8 mx-auto w-3/4 relative z-10"></div>
                                 <div className="mt-2">ผู้รับเงิน</div>
                             </div>
@@ -600,9 +585,6 @@ const DocumentFormPage: React.FC<DocumentFormProps> = ({ type }) => {
                          <div className="border border-slate-300 rounded-lg p-4 flex flex-col justify-between h-32 text-center">
                              <div className="text-left font-semibold">ในนาม {currentAccount?.name}</div>
                              <div>
-                                 {currentAccount?.signatureUrl && (
-                                    <img src={currentAccount.signatureUrl} className="h-10 mx-auto object-contain mb-[-10px]" alt="signature" crossOrigin="anonymous"/>
-                                 )}
                                  <div className="border-b border-dotted border-slate-400 w-3/4 mx-auto mb-2 relative z-10"></div>
                                  <div>ผู้อนุมัติ</div>
                              </div>
@@ -654,7 +636,6 @@ const DocumentFormPage: React.FC<DocumentFormProps> = ({ type }) => {
 
   return (
     <div className="pb-20">
-        {/* Dialog */}
         {dialog.isOpen && (
             <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in">
                 <div className="bg-white rounded-xl shadow-xl w-full max-w-sm overflow-hidden">
@@ -662,25 +643,33 @@ const DocumentFormPage: React.FC<DocumentFormProps> = ({ type }) => {
                         {dialog.type === 'error' ? <AlertCircle size={24} /> : <CheckCircle2 size={24} />}
                         <h3 className="font-bold text-lg">{dialog.title}</h3>
                     </div>
-                    <div className="p-6"><p className="text-slate-600">{dialog.message}</p></div>
+                    <div className="p-6"><p className="text-slate-600 break-words">{dialog.message}</p></div>
                     <div className="px-6 py-4 bg-slate-50 flex justify-end">
                         <button onClick={closeDialog} className="px-4 py-2 bg-slate-800 text-white rounded-lg">ตกลง</button>
                     </div>
                 </div>
             </div>
         )}
+        
+        {error && !dialog.isOpen && (
+            <div className="fixed bottom-4 right-4 z-[200] bg-red-50 border border-red-200 text-red-800 p-4 rounded-xl shadow-lg flex items-center gap-3 animate-in slide-in-from-bottom-5 max-w-md">
+                <AlertCircle size={24} className="shrink-0" />
+                <div>
+                    <p className="font-bold">ข้อผิดพลาด</p>
+                    <p className="text-sm break-words">{error}</p>
+                </div>
+                <button onClick={() => setError(null)} className="ml-auto p-1 hover:bg-red-100 rounded"><X size={18}/></button>
+            </div>
+        )}
 
-        {/* Hidden Render for Direct PDF Download */}
         <div className="fixed left-[-9999px] top-0 pointer-events-none opacity-0 overflow-hidden h-0 w-0">
              <div ref={hiddenRef}>
                  <DocumentSetWrapper paperRef={null} />
              </div>
         </div>
 
-        {/* Preview Modal */}
         {showPreviewModal && (
             <div className="fixed inset-0 z-[150] bg-slate-900/95 backdrop-blur-sm flex flex-col animate-in fade-in duration-200">
-                {/* Header with Back Button */}
                 <div className="flex items-center justify-between p-4 bg-slate-800 border-b border-slate-700 shrink-0">
                     <button 
                         onClick={() => setShowPreviewModal(false)} 
@@ -703,9 +692,7 @@ const DocumentFormPage: React.FC<DocumentFormProps> = ({ type }) => {
             </div>
         )}
 
-        {/* Main Edit Form */}
         <div className="container mx-auto px-4 py-8 max-w-5xl">
-            {/* TOOLBAR */}
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
                 <div className="flex items-center gap-4">
                     <button onClick={() => navigate(`/${getRoutePath(type)}`)} className="text-slate-500 hover:text-slate-700 flex items-center gap-1 transition-colors">
@@ -716,7 +703,6 @@ const DocumentFormPage: React.FC<DocumentFormProps> = ({ type }) => {
                     </h1>
                 </div>
 
-                {/* Desktop Buttons */}
                 <div className="hidden md:flex gap-2">
                     <button onClick={handleSave} disabled={saving} className="px-4 py-2 bg-white border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 font-medium flex items-center gap-2 shadow-sm">
                         {saving ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />} บันทึก
@@ -731,7 +717,6 @@ const DocumentFormPage: React.FC<DocumentFormProps> = ({ type }) => {
                         <Printer size={18} /> พิมพ์
                     </button>
                     
-                    {/* Convert Actions - Auto-Save Enabled */}
                     {type === 'quotation' && (
                         <button 
                             onClick={() => handleConvert('invoice')} 
@@ -752,7 +737,6 @@ const DocumentFormPage: React.FC<DocumentFormProps> = ({ type }) => {
                     )}
                 </div>
 
-                {/* Mobile Dropdown */}
                 <div className="md:hidden relative z-10">
                     <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)} className="px-4 py-2 bg-primary-600 text-white rounded-lg font-medium flex items-center gap-2 shadow-sm">
                         จัดการ <Eye size={18} />
@@ -774,9 +758,7 @@ const DocumentFormPage: React.FC<DocumentFormProps> = ({ type }) => {
                 </div>
             </div>
             
-            {/* Form Content */}
             <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                 {/* Header Form */}
                  <div className="p-6 border-b border-slate-100 bg-slate-50/50 grid grid-cols-1 md:grid-cols-2 gap-8">
                     <div>
                         <label className="block text-sm font-medium text-slate-700 mb-1.5">เลือกลูกค้า <span className="text-red-500">*</span></label>
@@ -793,7 +775,6 @@ const DocumentFormPage: React.FC<DocumentFormProps> = ({ type }) => {
                         )}
                         <button onClick={() => navigate('/customers')} className="text-xs text-primary-600 hover:underline mt-2 flex items-center gap-1 font-medium"><Plus size={12} /> เพิ่มลูกค้าใหม่</button>
                         
-                        {/* Project Name Field */}
                         <div className="mt-4">
                             <label className="block text-sm font-medium text-slate-700 mb-1.5">ชื่อโปรเจค / ชื่องาน</label>
                             <input type="text" className="w-full px-4 py-2.5 border border-slate-200 rounded-lg shadow-sm bg-white text-slate-900 focus:ring-2 focus:ring-primary-500 outline-none" placeholder="เช่น ถ่ายภาพงานแต่งงาน, ออกแบบโลโก้" value={formData.projectName || ''} onChange={e => setFormData({...formData, projectName: e.target.value})} />
@@ -818,7 +799,6 @@ const DocumentFormPage: React.FC<DocumentFormProps> = ({ type }) => {
                     </div>
                 </div>
                 
-                {/* Items Section */}
                 <div className="p-6">
                     <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">รายการสินค้า / บริการ <span className="text-xs font-normal text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">{formData.items?.length || 0} รายการ</span></h3>
                     <div className="space-y-3">
@@ -840,7 +820,6 @@ const DocumentFormPage: React.FC<DocumentFormProps> = ({ type }) => {
                     </div>
                 </div>
 
-                {/* Summary Section */}
                 <div className="p-6 border-t border-slate-100 grid grid-cols-1 md:grid-cols-2 gap-8 bg-slate-50/30">
                     <div>
                         <label className="block text-sm font-medium text-slate-700 mb-1.5">หมายเหตุ / เงื่อนไขการชำระเงิน</label>

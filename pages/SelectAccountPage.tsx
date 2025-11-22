@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useAccount } from '../context/AccountContext';
@@ -45,7 +44,7 @@ const SelectAccountPage: React.FC = () => {
     try {
         await createAccount({
             ...formData,
-            userId: user.uid,
+            user_id: user.uid,
             email: formData.email || user.email || '' // Default to user email if empty
         });
         // createAccount automatically switches and redirects in logic, 

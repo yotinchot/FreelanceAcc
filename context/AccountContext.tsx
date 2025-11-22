@@ -53,7 +53,6 @@ export const AccountProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 localStorage.setItem(`selected_account_${user.uid}`, userAccounts[0].id);
             } else {
                  // If multiple and no selection, we might leave it null to force selection page
-                 // But for now, let's not auto-select if > 1 so the user sees the switcher page logic
                  setCurrentAccount(null);
             }
         } else {
