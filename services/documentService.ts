@@ -69,9 +69,8 @@ const mapDocFromDB = (item: any): AppDocument => ({
     vatAmount: item.vat_amount,
     grandTotal: item.grand_total,
     withholdingTaxRate: item.withholding_tax_rate,
-    // Fix: Handle missing columns gracefully
-    whtReceived: item.wht_received || false,
-    whtReceivedDate: item.wht_received_date ? new Date(item.wht_received_date) : undefined,
+    whtReceived: false, // item.wht_received || false, // Disabled due to schema error
+    whtReceivedDate: undefined, // item.wht_received_date ? new Date(item.wht_received_date) : undefined,
     notes: item.notes,
     status: item.status,
     createdAt: item.created_at ? new Date(item.created_at) : undefined,
@@ -130,34 +129,32 @@ export const createDocument = async (docData: Omit<AppDocument, 'id' | 'document
   
   try {
     const payload = {
-      user_id: docData.user_id, 
-      account_id: docData.account_id,
-      type: docData.type,
-      document_no: documentNo,
-      name: docData.projectName || documentNo, // Added 'name' to satisfy DB constraint
-      reference_no: docData.referenceNo,
-      reference_id: docData.referenceId,
-      project_name: docData.projectName,
-      customer_id: docData.customerId,
-      customer_name: docData.customerName,
-      customer_address: docData.customerAddress,
-      customer_tax_id: docData.customerTaxId,
-      issue_date: docData.issueDate,
-      due_date: docData.dueDate,
-      paid_date: docData.paidDate,
-      items: docData.items,
-      subtotal: docData.subtotal,
-      vat_rate: docData.vatRate,
-      vat_amount: docData.vatAmount,
-      grand_total: docData.grandTotal,
-      file_url: "", // Added to satisfy NOT NULL constraint
-      // withholding_tax_rate: docData.withholdingTaxRate, // Commented out to fix schema error
-      // wht_received: docData.whtReceived,
-      // wht_received_date: docData.whtReceivedDate,
-      notes: docData.notes,
-      status: docData.status,
-      created_at: new Date().toISOString()
-    };
+  user_id: docData.user_id, 
+  account_id: docData.account_id,
+  type: docData.type,
+  document_no: documentNo,
+  name: docData.projectName || documentNo,
+  reference_no: docData.referenceNo,
+  reference_id: docData.referenceId,
+  project_name: docData.projectName,
+  customer_id: docData.customerId,
+  customer_name: docData.customerName,
+  customer_address: docData.customerAddress,
+  customer_tax_id: docData.customerTaxId,
+  issue_date: docData.issueDate,
+  due_date: docData.dueDate,
+  paid_date: docData.paidDate,
+  items: docData.items,
+  subtotal: docData.subtotal,
+  vat_rate: docData.vatRate,
+  vat_amount: docData.vatAmount,
+  grand_total: docData.grandTotal,
+  file_url: "", 
+  withholding_tax_rate: docData.withholdingTaxRate || 0,
+  notes: docData.notes,
+  status: docData.status,
+  created_at: new Date().toISOString()
+};
 
     const { data, error } = await supabase
       .from(TABLE_NAME)
@@ -178,7 +175,6 @@ export const createDocument = async (docData: Omit<AppDocument, 'id' | 'document
 
 export const updateDocument = async (id: string, docData: Partial<AppDocument>): Promise<void> => {
   try {
-    // const payload: any = { updated_at: new Date().toISOString() }; // Commented out to fix schema error
     const payload: any = {};
     
     if (docData.status !== undefined) payload.status = docData.status;
@@ -194,13 +190,11 @@ export const updateDocument = async (id: string, docData: Partial<AppDocument>):
     if (docData.customerAddress !== undefined) payload.customer_address = docData.customerAddress;
     if (docData.customerTaxId !== undefined) payload.customer_tax_id = docData.customerTaxId;
     if (docData.projectName !== undefined) {
-        payload.project_name = docData.projectName;
-        payload.name = docData.projectName || "Document"; // Update name if project name changes
-    }
-    // if (docData.withholdingTaxRate !== undefined) payload.withholding_tax_rate = docData.withholdingTaxRate; // Commented out to fix schema error
-    
-    // Temporarily removed wht_received fields to fix schema error
-    // if (docData.whtReceived !== undefined) payload.wht_received = docData.whtReceived;
+    payload.project_name = docData.projectName;
+    payload.name = docData.projectName || "Document";
+}
+if (docData.withholdingTaxRate !== undefined) payload.withholding_tax_rate = docData.withholdingTaxRate;
+    // if (docData.whtReceived !== undefined) payload.wht_received = docData.whtReceived; // Commented out
     // if (docData.whtReceivedDate !== undefined) payload.wht_received_date = docData.whtReceivedDate;
 
     const { error } = await supabase
@@ -233,17 +227,20 @@ export const deleteDocument = async (id: string): Promise<void> => {
 
 export const toggleWhtReceived = async (id: string, received: boolean): Promise<void> => {
   try {
-    // This might fail if column doesn't exist, wrap in try catch to not crash UI
+    // Commented out to prevent schema error
+    /*
     const { error } = await supabase
       .from(TABLE_NAME)
       .update({
-          // wht_received: received,
-          // wht_received_date: received ? new Date().toISOString() : null
+          wht_received: received,
+          wht_received_date: received ? new Date().toISOString() : null
       })
       .eq('id', id);
 
     if (error) throw error;
+    */
   } catch (error: any) {
-    console.error("Error toggling WHT received (Schema mismatch):", error.message);
+    console.error("Error toggling WHT received:", error.message);
   }
 };
+    

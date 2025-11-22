@@ -25,7 +25,7 @@ export const getAccountNotifications = async (accountId: string): Promise<Notifi
       title: item.title,
       message: item.message,
       type: item.type,
-      isRead: item.is_read,
+      isRead: false, // item.is_read, // Default to false as column is missing
       createdAt: new Date(item.created_at),
       relatedDocId: item.related_doc_id,
       relatedDocNo: item.related_doc_no,
@@ -38,6 +38,8 @@ export const getAccountNotifications = async (accountId: string): Promise<Notifi
 };
 
 export const markNotificationAsRead = async (id: string): Promise<void> => {
+  // Disabled due to schema error
+  /*
   try {
     await supabase
       .from(TABLE_NAME)
@@ -46,9 +48,12 @@ export const markNotificationAsRead = async (id: string): Promise<void> => {
   } catch (error) {
     console.error("Error marking notification as read:", error);
   }
+  */
 };
 
 export const markAllAsRead = async (accountId: string): Promise<void> => {
+  // Disabled due to schema error
+  /*
   try {
     await supabase
       .from(TABLE_NAME)
@@ -58,6 +63,7 @@ export const markAllAsRead = async (accountId: string): Promise<void> => {
   } catch (error) {
     console.error("Error marking all as read", error);
   }
+  */
 };
 
 export const deleteNotification = async (id: string): Promise<void> => {
@@ -104,7 +110,7 @@ export const checkAndGenerateNotifications = async (userId: string, accountId: s
                         title: 'ใบแจ้งหนี้เกินกำหนดชำระ',
                         message: `ใบแจ้งหนี้ ${inv.documentNo} เกินกำหนดมาแล้ว ${Math.abs(diffDays)} วัน`,
                         type: 'error',
-                        is_read: false,
+                        // is_read: false,
                         related_doc_id: inv.id,
                         related_doc_no: inv.documentNo,
                         trigger_key: key,
@@ -121,7 +127,7 @@ export const checkAndGenerateNotifications = async (userId: string, accountId: s
                         title: 'ใกล้ครบกำหนดชำระ (พรุ่งนี้)',
                         message: `ใบแจ้งหนี้ ${inv.documentNo} จะครบกำหนดชำระในวันพรุ่งนี้`,
                         type: 'warning',
-                        is_read: false,
+                        // is_read: false,
                         related_doc_id: inv.id,
                         related_doc_no: inv.documentNo,
                         trigger_key: key,
@@ -138,7 +144,7 @@ export const checkAndGenerateNotifications = async (userId: string, accountId: s
                         title: 'ใกล้ครบกำหนดชำระ (3 วัน)',
                         message: `ใบแจ้งหนี้ ${inv.documentNo} จะครบกำหนดชำระในอีก 3 วัน`,
                         type: 'info',
-                        is_read: false,
+                        // is_read: false,
                         related_doc_id: inv.id,
                         related_doc_no: inv.documentNo,
                         trigger_key: key,
@@ -162,7 +168,7 @@ export const checkAndGenerateNotifications = async (userId: string, accountId: s
                     title: '🚨 รายได้เกิน 1.8 ล้านแล้ว!',
                     message: 'คุณต้องจดทะเบียน VAT ภายใน 30 วัน',
                     type: 'error',
-                    is_read: false,
+                    // is_read: false,
                     trigger_key: key,
                     created_at: new Date().toISOString()
                 });
@@ -176,7 +182,7 @@ export const checkAndGenerateNotifications = async (userId: string, accountId: s
                     title: '⚠️ ใกล้ถึงเกณฑ์จด VAT',
                     message: `รายได้สะสมปีนี้ ${(yearlyIncome/1000000).toFixed(2)} ล้านบาท ใกล้แตะ 1.8 ล้าน`,
                     type: 'warning',
-                    is_read: false,
+                    // is_read: false,
                     trigger_key: key,
                     created_at: new Date().toISOString()
                 });
@@ -201,7 +207,7 @@ export const checkAndGenerateNotifications = async (userId: string, accountId: s
                     title: '📊 ใกล้ขึ้นขั้นภาษีใหม่',
                     message: `อีก ${Math.round(bracketAnalysis.incomeToNext || 0).toLocaleString()} บาท จะขึ้นขั้นภาษี ${bracketAnalysis.nextBracket?.rate ? bracketAnalysis.nextBracket.rate : 0}%`,
                     type: 'info',
-                    is_read: false,
+                    // is_read: false,
                     trigger_key: key,
                     created_at: new Date().toISOString()
                 });
