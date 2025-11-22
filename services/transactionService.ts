@@ -40,15 +40,15 @@ export const getTransactions = async (userId: string, accountId?: string): Promi
 export const addTransaction = async (transaction: Omit<Transaction, 'id' | 'createdAt'>): Promise<string> => {
   try {
     const payload = {
-      user_id: transaction.user_id, 
+      // user_id: transaction.user_id, // Commented out to fix schema error
       account_id: transaction.account_id,
       type: transaction.type,
       date: transaction.date,
       amount: transaction.amount,
       category: transaction.category,
       description: transaction.description,
-      reference_no: transaction.referenceNo,
-      attachment_url: transaction.attachmentUrl,
+      // reference_no: transaction.referenceNo, // Commented out to fix schema error
+      // attachment_url: transaction.attachmentUrl, // Removed to fix schema error
       created_at: new Date().toISOString()
     };
 
@@ -75,8 +75,8 @@ export const updateTransaction = async (id: string, transaction: Partial<Transac
     if (transaction.amount !== undefined) payload.amount = transaction.amount;
     if (transaction.category !== undefined) payload.category = transaction.category;
     if (transaction.description !== undefined) payload.description = transaction.description;
-    if (transaction.referenceNo !== undefined) payload.reference_no = transaction.referenceNo;
-    if (transaction.attachmentUrl !== undefined) payload.attachment_url = transaction.attachmentUrl;
+    // if (transaction.referenceNo !== undefined) payload.reference_no = transaction.referenceNo; // Commented out to fix schema error
+    // if (transaction.attachmentUrl !== undefined) payload.attachment_url = transaction.attachmentUrl; // Removed to fix schema error
 
     const { error } = await supabase
       .from(TABLE_NAME)

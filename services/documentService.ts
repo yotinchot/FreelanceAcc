@@ -178,7 +178,8 @@ export const createDocument = async (docData: Omit<AppDocument, 'id' | 'document
 
 export const updateDocument = async (id: string, docData: Partial<AppDocument>): Promise<void> => {
   try {
-    const payload: any = { updated_at: new Date().toISOString() };
+    // const payload: any = { updated_at: new Date().toISOString() }; // Commented out to fix schema error
+    const payload: any = {};
     
     if (docData.status !== undefined) payload.status = docData.status;
     if (docData.items !== undefined) payload.items = docData.items;

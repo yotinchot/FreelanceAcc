@@ -45,17 +45,46 @@ export const getDashboardData = async (userId: string, accountId: string, range:
     }
 
     // 3. Totals Calculation
+    // Expense: Calculate from Transactions (Expenses are manually recorded there)
     const filteredTx = transactions.filter(t => new Date(t.date) >= startDate);
-    let income = 0;
     let expense = 0;
-
     filteredTx.forEach(t => {
-      if (t.type === 'income') income += t.amount;
-      else if (t.type === 'expense') expense += t.amount;
+      if (t.type === 'expense') expense += t.amount;
     });
 
-    // Calculate income from documents as well for better accuracy if transactions are missing
-    // But for now rely on transaction entries which are auto-created
+    // Income: Calculate from Documents (More reliable as transactions might fail or be deleted independently)
+    let income = 0;
+    
+    // Identify invoices that have been converted to receipts to avoid double counting
+    const convertedInvoiceIds = new Set(
+        allDocs
+        .filter(d => (d.type === 'receipt' || d.type === 'tax_receipt') && d.referenceId && d.status !== 'rejected')
+        .map(d => d.referenceId)
+    );
+
+    allDocs.forEach(d => {
+        if (d.status === 'rejected' || d.status === 'draft') return;
+        
+        // Use paidDate if available, otherwise issueDate for calculation
+        const docDate = d.paidDate ? new Date(d.paidDate) : new Date(d.issueDate);
+        if (docDate < startDate) return;
+
+        // Case 1: Receipts / Tax Receipts (Always Income)
+        if (d.type === 'receipt' || d.type === 'tax_receipt') {
+            income += d.grandTotal || 0;
+        } 
+        // Case 2: Tax Invoices (Treated as Cash Sales/Income in this system)
+        else if (d.type === 'tax_invoice') {
+            income += d.grandTotal || 0;
+        }
+        // Case 3: Paid Invoices (Not converted to receipts)
+        else if (d.type === 'invoice' && d.status === 'paid') {
+             // Only count if not referenced by a receipt
+             if (d.id && !convertedInvoiceIds.has(d.id)) {
+                 income += d.grandTotal || 0;
+             }
+        }
+    });
 
     // 4. Pending Invoices (Sent/Overdue)
     const pendingInvoices = allDocs.filter(d => 
@@ -65,11 +94,8 @@ export const getDashboardData = async (userId: string, accountId: string, range:
     const pendingIncome = pendingInvoices.reduce((sum, doc) => sum + doc.grandTotal, 0);
 
     // 5. Recent Documents (Mixed types, top 5)
-    // Filter only created documents (not drafts optionally, but usually drafts are fine to show)
-    // Let's show everything sorted by createdAt or issueDate
     const recentDocuments = [...allDocs]
         .sort((a, b) => {
-            // Prefer createdAt if available, else issueDate
             const tA = a.createdAt ? new Date(a.createdAt).getTime() : new Date(a.issueDate).getTime();
             const tB = b.createdAt ? new Date(b.createdAt).getTime() : new Date(b.issueDate).getTime();
             return tB - tA;
@@ -96,7 +122,8 @@ export const getDashboardData = async (userId: string, accountId: string, range:
     const pendingWht = allDocs.filter(d => 
         d.type === 'invoice' && 
         d.withholdingTaxRate && d.withholdingTaxRate > 0 && 
-        !d.whtReceived
+        !d.whtReceived &&
+        d.status !== 'draft' && d.status !== 'rejected'
     ).length;
 
     return {
